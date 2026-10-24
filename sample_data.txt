@@ -1,0 +1,7 @@
+What is Life?
+Life is a quality that distinguishes matter that has biological processes, such as signaling and self-sustaining processes, from that which does not.
+It is defined by the capacity for growth, reproduction, functional activity, and continual change preceding death.
+
+Retrieval-Augmented Generation (RAG):
+RAG is a technique that enhances large language models (LLMs) by retrieving facts from an external knowledge base to ground the LLM's generated responses on accurate and up-to-date information. 
+This prevents hallucinations and provides sources for the AI's claims.

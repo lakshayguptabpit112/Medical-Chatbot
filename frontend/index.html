@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Chatbot</title>
+    <link rel="stylesheet" href="/frontend/style.css?v=9">
+    <!-- FontAwesome for the send icon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <button class="new-chat-btn" onclick="createNewChat()">
+                New Chat
+            </button>
+            
+            <div class="chat-list">
+                <div class="chat-list-header">Recent Chats</div>
+                
+            </div>
+
+            <!-- Account area. The logout button is ready for JavaScript wiring. -->
+            <div class="sidebar-profile" aria-label="Demo user profile">
+                <div class="sidebar-profile-avatar" aria-hidden="true">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3304/3304567.png" alt="">
+                    <span class="sidebar-profile-status"></span>
+                </div>
+                <div class="sidebar-profile-details">
+                    <span class="sidebar-profile-name">Alex Morgan</span>
+                    <span class="sidebar-profile-label">Free plan</span>
+                </div>
+                <button
+                    id="logout-button"
+                    class="sidebar-logout"
+                    type="button"
+                    aria-label="Log out"
+                    title="Log out"
+                >
+                    <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                    <span>Log out</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="main-chat">
+            <!-- Header -->
+            <div class="chat-header">
+                <!-- Hamburger Button to hide sidebar -->
+                <button id="hamburger-btn" class="hamburger-btn">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="avatar-container">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3304/3304567.png" alt="Doctor Avatar" class="avatar">
+                    <span class="status-dot"></span>
+                </div>
+                <div class="header-info">
+                    <h2>Medical Chatbot</h2>
+                    <p>Ask me anything!</p>
+                </div>
+            </div>
+
+            <!-- Conversation view: loading stays inside this area only. -->
+            <div class="chat-view" id="chat-view">
+                <!-- Welcome Screen -->
+                <div id="welcome-screen" class="welcome-screen">
+                    <div class="welcome-logo">
+                        <img src="https://cdn-icons-png.flaticon.com/512/3304/3304567.png" alt="Doctor">
+                    </div>
+                    <h2>How can I help you today?</h2>
+                    <p>I am your Medical AI Assistant. Ask me a health question to get started.</p>
+                </div>
+
+                <!-- Chat History Area -->
+                <div class="chat-history" id="chat-history" style="display: none;">
+                    <!-- JavaScript dynamically injects messages here -->
+                </div>
+
+                <!-- Small loading screen for the conversation view only. -->
+                <div id="chat-loading" class="chat-loading" hidden aria-live="polite" aria-label="Loading chat">
+                    <span class="chat-loading-spinner" aria-hidden="true"></span>
+                    <span>Loading conversation...</span>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-wrapper">
+                <div class="chat-input-container">
+                    <textarea id="chat-input" rows="1" placeholder="Type your message..." autocomplete="off"></textarea>
+                    <button id="send-btn">
+                        <i class="fa-solid fa-paper-plane send-icon"></i>
+                    </button>
+                    <button id="stop-btn" onclick="stopGenerating()" style="display:none;">
+                        <i class="fa-solid fa-stop"></i>
+                    </button>
+                </div>
+                <div class="input-footer">
+                    <span id="word-counter" class="word-counter">0/500</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="login-overlay" class="login-overlay">
+        <section
+            class="login-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Account access"
+        >
+            <div class="login-mark" aria-hidden="true">+</div>
+
+            <!-- JavaScript will show this view by default. -->
+            <div id="login-view">
+                <p class="login-brand">MEDICAL CHATBOT</p>
+                <h1 id="login-title">Welcome back</h1>
+                <p id="login-description" class="login-description">
+                    Sign in to continue to your conversations.
+                </p>
+
+                <form id="login-form" class="auth-form" action="/login" method="post">
+                    <div class="login-field">
+                        <label for="login-username">Username</label>
+                        <input
+                            id="login-username"
+                            name="username"
+                            type="text"
+                            autocomplete="username"
+                            required
+                        >
+                    </div>
+
+                    <div class="login-field">
+                        <label for="login-password">Password</label>
+                        <input
+                            id="login-password"
+                            name="password"
+                            type="password"
+                            autocomplete="current-password"
+                            required
+                        >
+                    </div>
+
+                    <button class="login-submit" type="submit">Sign in</button>
+                    <p id="login-error" class="login-error" role="alert" hidden></p>
+                </form>
+
+                <div class="auth-divider">
+                    <span>OR</span>
+                </div>
+
+                <div id="google-login-btn" class="google-btn-container"></div>
+
+                <p class="register-prompt">
+                    Don't have an account?
+                    <button id="show-register" class="register-link" type="button">
+                        Create one
+                    </button>
+                </p>
+            </div>
+
+            <!-- JavaScript can remove hidden from this view when Create one is clicked. -->
+            <div id="register-view" hidden>
+                <p class="login-brand">MEDICAL CHATBOT</p>
+                <h1>Create account</h1>
+                <p class="login-description">
+                    Create an account to save your conversations.
+                </p>
+
+                <form id="register-form" class="auth-form">
+                    <div class="login-field">
+                        <label for="register-username">Username</label>
+                        <input
+                            id="register-username"
+                            name="username"
+                            type="text"
+                            autocomplete="username"
+                            minlength="3"
+                            required
+                        >
+                    </div>
+
+                    <div class="login-field">
+                        <label for="register-email">Email</label>
+                        <input
+                            id="register-email"
+                            name="email"
+                            type="email"
+                            autocomplete="email"
+                            required
+                        >
+                    </div>
+
+                    <div class="login-field">
+                        <label for="register-password">Password</label>
+                        <input
+                            id="register-password"
+                            name="password"
+                            type="password"
+                            autocomplete="new-password"
+                            minlength="8"
+                            required
+                        >
+                    </div>
+
+                    <button class="login-submit" type="submit">
+                        Create account
+                    </button>
+
+                    <p id="register-error" class="login-error" role="alert" hidden></p>
+                    <p id="register-success" class="register-success" hidden></p>
+                </form>
+
+                <div class="auth-divider">
+                    <span>OR</span>
+                </div>
+
+                <div id="google-register-btn" class="google-btn-container"></div>
+
+                <p class="register-prompt">
+                    Already have an account?
+                    <button id="show-login" class="register-link" type="button">
+                        Sign in
+                    </button>
+                </p>
+            </div>
+        </section>
+    </div>
+
+    <script src="/frontend/script.js?v=4"></script>
+</body>
+</html>
