@@ -868,12 +868,183 @@ body {
     min-height: 44px;
 }
 
-@media (max-width: 480px) {
+/* ==========================================================================
+   Mobile Responsive Styles (Screen widths 768px and below)
+   PC / Desktop styles remain 100% untouched.
+   ========================================================================== */
+@media (max-width: 768px) {
+    body {
+        height: 100dvh;
+        height: 100vh;
+    }
+
+    .app-container {
+        height: 100dvh;
+        height: 100vh;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* --- Sidebar Mobile Drawer --- */
+    .sidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 280px;
+        max-width: 82vw;
+        height: 100dvh;
+        height: 100vh;
+        z-index: 1000;
+        background-color: #171721;
+        box-shadow: 6px 0 30px rgba(0, 0, 0, 0.7);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: translateX(0);
+        opacity: 1;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .sidebar.collapsed {
+        transform: translateX(-100%);
+        width: 280px;
+        padding: 15px;
+        opacity: 1;
+        border-right: none;
+        box-shadow: none;
+        pointer-events: none;
+    }
+
+    /* --- Header on Mobile --- */
+    .chat-header {
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .hamburger-btn {
+        font-size: 1.25rem;
+        padding: 8px;
+        margin-right: 10px;
+        min-width: 36px;
+        min-height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .avatar-container {
+        width: 40px;
+        height: 40px;
+        margin-right: 10px;
+    }
+
+    .avatar {
+        width: 32px;
+        height: 32px;
+    }
+
+    .header-info h2 {
+        font-size: 15px;
+    }
+
+    .header-info p {
+        font-size: 11px;
+    }
+
+    /* --- Chat History & Conversation on Mobile --- */
+    .chat-history {
+        padding: 12px 12px;
+        gap: 12px;
+    }
+
+    .message {
+        max-width: 90%;
+        min-width: 0;
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+
+    /* Mobile screens have no hover: keep timestamp & reuse button visible */
+    .msg-footer {
+        opacity: 0.85;
+    }
+
+    /* --- Welcome Screen on Mobile --- */
+    .welcome-screen {
+        padding: 16px;
+    }
+
+    .welcome-logo img {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 12px;
+    }
+
+    .welcome-screen h2 {
+        font-size: 20px;
+    }
+
+    .welcome-screen p {
+        font-size: 13px;
+        max-width: 290px;
+    }
+
+    /* --- Sources Dropdown on Mobile --- */
+    .sources-container {
+        max-width: 100%;
+        padding: 6px 10px;
+    }
+
+    .source-content {
+        padding: 10px;
+        font-size: 11px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    /* --- Input Area on Mobile --- */
+    .input-wrapper {
+        padding: 0 10px;
+        margin-bottom: 10px;
+    }
+
+    .chat-input-container {
+        padding: 10px 14px;
+        border-radius: 12px;
+    }
+
+    #chat-input {
+        /* 16px is required on iOS Safari to prevent disruptive auto-zooming */
+        font-size: 16px;
+        max-height: 100px;
+    }
+
+    .input-footer {
+        padding: 4px 2px 0 0;
+    }
+
+    /* --- Auth Dialogs on Mobile --- */
     .login-overlay {
         padding: 16px;
     }
 
     .login-dialog {
-        padding: 28px 24px;
+        width: min(100%, 380px);
+        padding: 26px 20px;
+    }
+
+    .login-mark {
+        width: 36px;
+        height: 36px;
+        font-size: 24px;
+        margin-bottom: 14px;
+    }
+
+    .login-dialog h1 {
+        font-size: 22px;
+    }
+
+    .login-field input {
+        font-size: 16px;
+        min-height: 42px;
     }
 }

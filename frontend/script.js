@@ -75,6 +75,9 @@ sendBtn.onclick = sendMessage;
 //LoadEverything AT REFRESH
 
 document.addEventListener("DOMContentLoaded", () => {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.add("collapsed");
+    }
     initializeApp();
 });
 
@@ -190,6 +193,16 @@ hamburgerBtn.addEventListener("click", () => {
    
     sidebar.classList.toggle("collapsed");
 });
+
+// Close sidebar on mobile when tapping the chat area
+const mainChatArea = document.querySelector(".main-chat");
+if (mainChatArea) {
+    mainChatArea.addEventListener("click", () => {
+        if (window.innerWidth <= 768 && !sidebar.classList.contains("collapsed")) {
+            sidebar.classList.add("collapsed");
+        }
+    });
+}
 
 
 
@@ -409,6 +422,9 @@ async function deleteChat(event, chatId) {
 }
 
 function createNewChat() {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.add("collapsed");
+    }
     setCurrentChat(null);
     history = [];
     UpdateChatHistory(); // Will clear the container
@@ -416,6 +432,9 @@ function createNewChat() {
 }
 
 function switchChat(newChatId) {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.add("collapsed");
+    }
     if (currentChatId === newChatId) return; 
     
     // Save the user's currently typed text before we switch away!
