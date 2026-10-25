@@ -626,10 +626,13 @@ async def chat_with_bot(request: ChatRequest, background_tasks: BackgroundTasks,
         db.add(db_message)
         db.commit()
 
-        docs = await history_aware_retriever.ainvoke({
-            "input": user_message,
-            "chat_history": old_history
-        })
+        if not old_history:
+            docs = await retriever.ainvoke(user_message)
+        else:
+            docs = await history_aware_retriever.ainvoke({
+                "input": user_message,
+                "chat_history": old_history
+            })
 
         sources_list = []
         for doc in docs:
