@@ -1,13 +1,3 @@
----
-title: Medical AI Assistant
-emoji: 🩺
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # Medical Chatbot (RAG-Powered)
 
 An intelligent medical assistant powered by FastAPI, LangChain, Google Gemini, Pinecone vector search, and Supabase PostgreSQL.
