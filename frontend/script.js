@@ -75,9 +75,7 @@ sendBtn.onclick = sendMessage;
 //LoadEverything AT REFRESH
 
 document.addEventListener("DOMContentLoaded", () => {
-    if (window.innerWidth <= 768) {
-        sidebar.classList.add("collapsed");
-    }
+    closeSidebarOnMobile();
     initializeApp();
 });
 
@@ -188,21 +186,26 @@ function loadDraft(chatId) {
 
 
 
-// YE BAS BURGER KHANE KE LIYE HEI
-hamburgerBtn.addEventListener("click", () => {
-   
-    sidebar.classList.toggle("collapsed");
-});
-
-// Close sidebar on mobile when tapping the chat area
-const mainChatArea = document.querySelector(".main-chat");
-if (mainChatArea) {
-    mainChatArea.addEventListener("click", () => {
-        if (window.innerWidth <= 768 && !sidebar.classList.contains("collapsed")) {
-            sidebar.classList.add("collapsed");
-        }
-    });
+function closeSidebarOnMobile() {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.add("collapsed");
+        const backdrop = document.getElementById("sidebar-backdrop");
+        if (backdrop) backdrop.classList.remove("active");
+    }
 }
+
+// Hamburger Button (Toggle drawer and backdrop on mobile)
+hamburgerBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("collapsed");
+    const backdrop = document.getElementById("sidebar-backdrop");
+    if (backdrop) {
+        if (!sidebar.classList.contains("collapsed") && window.innerWidth <= 768) {
+            backdrop.classList.add("active");
+        } else {
+            backdrop.classList.remove("active");
+        }
+    }
+});
 
 
 
@@ -422,9 +425,7 @@ async function deleteChat(event, chatId) {
 }
 
 function createNewChat() {
-    if (window.innerWidth <= 768) {
-        sidebar.classList.add("collapsed");
-    }
+    closeSidebarOnMobile();
     setCurrentChat(null);
     history = [];
     UpdateChatHistory(); // Will clear the container
@@ -432,9 +433,7 @@ function createNewChat() {
 }
 
 function switchChat(newChatId) {
-    if (window.innerWidth <= 768) {
-        sidebar.classList.add("collapsed");
-    }
+    closeSidebarOnMobile();
     if (currentChatId === newChatId) return; 
     
     // Save the user's currently typed text before we switch away!
