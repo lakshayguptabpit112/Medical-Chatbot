@@ -326,7 +326,7 @@ async function initializeApp() {
 
         showChatLoading()
         await UpdateUserInfo();
-        await loadAllChats();
+        await loadAllChats(true);
         hideChatLoading()
   
 
@@ -350,7 +350,7 @@ async function UpdateUserInfo() {
     }
 }
 
-async function loadAllChats(){
+async function loadAllChats(isInitialBoot = false){
     const response = await fetch("/chats"); 
     const fetchedChats = await response.json(); 
 
@@ -359,39 +359,30 @@ async function loadAllChats(){
     if (chats.length === 0) {
         setCurrentChat(null);
         updateUIState();
+        UpdateChats();
+        return;
     }
 
-    if (currentChatId === null && chats.length > 0) {
-        
-        // 1. Ask the browser what chat we were looking at before we refreshed!
+    // Only restore previous chat on initial page boot
+    if (isInitialBoot && currentChatId === null && chats.length > 0) {
         const savedId = localStorage.getItem("savedChatId");
-        
-        // 2. Double check that this chat wasn't deleted in another tab!
         let chatExists = false;
         if (savedId) {
             for (let i = 0; i < chats.length; i++) {
-                if (chats[i].id == savedId) { // Use == because localStorage saves numbers as Strings!
+                if (chats[i].id == savedId) {
                     chatExists = true;
                     break;
                 }
             }
         }
         
-        // 3. If it is safe, load it! Otherwise, fallback to the top chat!
-        let targetId;
         if (chatExists) {
-            targetId = parseInt(savedId);
-        } else {
-            targetId = chats[0].id;
+            switchChat(parseInt(savedId));
+            return;
         }
-        
-        // Instead of doing it manually, just use our switchChat function!
-        switchChat(targetId);
-    } else {
-        // If currentChatId is NOT null, it means we are just reloading the sidebar
-        // so we just need to redraw the buttons.
-        UpdateChats();
     }
+
+    UpdateChats();
 }
 function UpdateChats(){
 const ChatsContainer = document.querySelector(".chat-list");
