@@ -197,6 +197,7 @@ function openSidebarOnMobile() {
         sidebar.classList.add("open");
         const backdrop = document.getElementById("sidebar-backdrop");
         if (backdrop) backdrop.classList.add("active");
+        loadAllChats();
     }
 }
 
@@ -214,9 +215,13 @@ function toggleSidebar() {
             closeSidebarOnMobile();
         } else {
             openSidebarOnMobile();
+            loadAllChats(); // Pull fresh chats when drawer opens
         }
     } else {
         sidebar.classList.toggle("collapsed");
+        if (!sidebar.classList.contains("collapsed")) {
+            loadAllChats(); // Re-sync on PC when opening
+        }
     }
 }
 
@@ -733,19 +738,17 @@ function setChatLoading(chatId, isLoading) {
 
 async function ensureCurrentChat(userMessage) {
     if (currentChatId !== null) return;
-
     const response = await fetch(
         "/chats/new?user_prompt=" + encodeURIComponent(userMessage),
         { method: "POST" }
     );
     const data = await response.json();
     setCurrentChat(data.id);
-
-    // Load the new chat into the sidebar before continuing.
-    await loadAllChats();
+    // Switch screen to normal chat immediately!
     updateUIState();
+    // Run sidebar update in background without "await" — does not block!
+    loadAllChats();
 }
-
 async function requestBotReply(message, chatId) {
     const response = await fetch("/chat", {
         method: "POST",

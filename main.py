@@ -491,17 +491,12 @@ def get_all_chats(current_user: UserInDB = Depends(get_current_user), db: Sessio
 
 @app.post("/chats/new")
 def create_new_chat(user_prompt: str, current_user: UserInDB = Depends(get_current_user), db: Session = Depends(get_db)):
-    new_chat = Chat(user_id=current_user.id, title="New Chat")
-    db.add(new_chat)
-    db.commit()
-    db.refresh(new_chat)
+    endingstring = "..." if len(user_prompt) > 20 else ""
+    title = f"{user_prompt[:20]}{endingstring}"
     
-    max_size = 20
-    endingstring = ""
-    if len(user_prompt) > 20:
-        endingstring = "..."
-
-    new_chat.title = f"{user_prompt[:20]+endingstring}"
+    # One single insert with the real title, 1 commit, done!
+    new_chat = Chat(user_id=current_user.id, title=title)
+    db.add(new_chat)
     db.commit()
     
     return {"id": new_chat.id}
