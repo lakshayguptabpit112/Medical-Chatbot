@@ -35,7 +35,7 @@ class Message(Base):
     __tablename__ = "messages"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    chat_id : Mapped[int] = mapped_column(Integer, ForeignKey("chats.id"))
+    chat_id : Mapped[int] = mapped_column(Integer, ForeignKey("chats.id"), index=True)
     role : Mapped[str] = mapped_column(String)  # 'user', 'ai', or 'error'
     content : Mapped[str] = mapped_column(String)
     sources : Mapped[str] = mapped_column(String, nullable=True)
