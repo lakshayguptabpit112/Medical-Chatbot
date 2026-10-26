@@ -74,10 +74,16 @@ sendBtn.onclick = sendMessage;
 
 //LoadEverything AT REFRESH
 
-document.addEventListener("DOMContentLoaded", () => {
+function startApp() {
     closeSidebarOnMobile();
     initializeApp();
-});
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startApp);
+} else {
+    startApp();
+}
 
 //helping Functions:
 
@@ -186,26 +192,68 @@ function loadDraft(chatId) {
 
 
 
+function openSidebarOnMobile() {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.add("open");
+        const backdrop = document.getElementById("sidebar-backdrop");
+        if (backdrop) backdrop.classList.add("active");
+    }
+}
+
 function closeSidebarOnMobile() {
     if (window.innerWidth <= 768) {
-        sidebar.classList.add("collapsed");
+        sidebar.classList.remove("open");
         const backdrop = document.getElementById("sidebar-backdrop");
         if (backdrop) backdrop.classList.remove("active");
     }
 }
 
-// Hamburger Button (Toggle drawer and backdrop on mobile)
-hamburgerBtn.addEventListener("click", () => {
-    sidebar.classList.toggle("collapsed");
-    const backdrop = document.getElementById("sidebar-backdrop");
-    if (backdrop) {
-        if (!sidebar.classList.contains("collapsed") && window.innerWidth <= 768) {
-            backdrop.classList.add("active");
+function toggleSidebar() {
+    if (window.innerWidth <= 768) {
+        if (sidebar.classList.contains("open")) {
+            closeSidebarOnMobile();
         } else {
-            backdrop.classList.remove("active");
+            openSidebarOnMobile();
+        }
+    } else {
+        sidebar.classList.toggle("collapsed");
+    }
+}
+
+// Hamburger Button (Toggle drawer on mobile, collapse on desktop)
+hamburgerBtn.addEventListener("click", toggleSidebar);
+
+// Mobile touch swipe gestures (ChatGPT app feel)
+let touchStartX = 0;
+let touchStartY = 0;
+
+document.addEventListener("touchstart", (e) => {
+    if (!e.changedTouches || e.changedTouches.length === 0) return;
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+}, { passive: true });
+
+document.addEventListener("touchend", (e) => {
+    if (!e.changedTouches || e.changedTouches.length === 0) return;
+    const touchEndX = e.changedTouches[0].screenX;
+    const touchEndY = e.changedTouches[0].screenY;
+    const diffX = touchEndX - touchStartX;
+    const diffY = Math.abs(touchEndY - touchStartY);
+
+    // Ignore mostly-vertical scrolling
+    if (diffY > 60 || Math.abs(diffX) < 45) return;
+
+    if (window.innerWidth <= 768) {
+        // Swipe right from left edge (first 50px of screen) -> Open sidebar
+        if (touchStartX < 50 && diffX > 45) {
+            openSidebarOnMobile();
+        }
+        // Swipe left when sidebar is open -> Close sidebar
+        else if (diffX < -45 && sidebar.classList.contains("open")) {
+            closeSidebarOnMobile();
         }
     }
-});
+}, { passive: true });
 
 
 

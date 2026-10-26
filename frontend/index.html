@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Medical Chatbot</title>
-    <link rel="stylesheet" href="/frontend/style.css?v=11">
+    <link rel="stylesheet" href="/frontend/style.css?v=12">
     <!-- FontAwesome for the send icon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -19,8 +19,18 @@
 
         <!-- Sidebar -->
         <div class="sidebar">
+            <div class="sidebar-header-mobile">
+                <div class="mobile-drawer-title">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3304/3304567.png" alt="" class="drawer-title-avatar">
+                    <span>Medical Chatbot</span>
+                </div>
+                <button class="sidebar-close-btn" onclick="closeSidebarOnMobile()" aria-label="Close menu">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
             <button class="new-chat-btn" onclick="createNewChat()">
-                New Chat
+                <i class="fa-solid fa-plus"></i> New Chat
             </button>
             
             <div class="chat-list">
@@ -240,6 +250,6 @@
         </section>
     </div>
 
-    <script src="/frontend/script.js?v=6"></script>
+    <script src="/frontend/script.js?v=7"></script>
 </body>
 </html>
