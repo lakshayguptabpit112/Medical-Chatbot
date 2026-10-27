@@ -121,18 +121,19 @@ function setCurrentChat(chatId) {
 
 
 function HandleChatInputState(DisableChat){
-
+    const inputContainer = document.querySelector(".chat-input-container");
     if(DisableChat){
-
         chatInput.disabled = true;
         // Hide Send, Show Stop
         sendBtn.style.display = "none";
         stopBtn.style.display = "inline-block";
+        if (inputContainer) inputContainer.classList.add("generating");
     } else {
         chatInput.disabled = false;
         // Show Send, Hide Stop
         sendBtn.style.display = "inline-block";
         stopBtn.style.display = "none";
+        if (inputContainer) inputContainer.classList.remove("generating");
         chatInput.focus();
     }
 }
@@ -399,9 +400,11 @@ ChatsContainer.innerHTML +=`<div class="chat-list-header">Recent Chats</div>`;
           activeClass = "active";
       }
 
+      const generatingClass = loadingChats.has(chat.id) ? "generating" : "";
+
       // Draw the button! Notice the onclick="switchChat(id)" magic trick
       ChatsContainer.innerHTML += `
-          <div class="chat-item ${activeClass}" onclick="switchChat(${chat.id})">
+          <div class="chat-item ${activeClass} ${generatingClass}" data-chat-id="${chat.id}" onclick="switchChat(${chat.id})">
               <i class="fa-regular fa-message"></i>
               <span class="chat-title">${chat.title}</span>
               
@@ -723,6 +726,10 @@ function setChatLoading(chatId, isLoading) {
         loadingChats.add(chatId);
     } else {
         loadingChats.delete(chatId);
+    }
+    const targetItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (targetItem) {
+        targetItem.classList.toggle("generating", isLoading);
     }
     updateUIState();
 }

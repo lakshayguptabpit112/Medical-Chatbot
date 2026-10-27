@@ -260,6 +260,41 @@ body {
     color: #a22c23 !important; 
 }
 
+/* --- Option C: Sidebar Generating Shimmer Underline --- */
+.chat-item::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, #f6c86a 30%, #38bdf8 70%, transparent 100%);
+    background-size: 200% 100%;
+    animation: sidebarItemShimmer 1.8s ease-in-out infinite;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.chat-item.generating::after {
+    opacity: 1;
+}
+
+.chat-item.generating > i {
+    color: #f6c86a !important;
+    animation: iconGeneratingPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sidebarItemShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes iconGeneratingPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.92); }
+}
+
 /* Main Chat Area */
 .main-chat {
     flex: 1;
@@ -530,6 +565,8 @@ body {
 }
 
 .chat-input-container {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     padding: 15px 20px;
@@ -538,6 +575,32 @@ body {
     border-radius: 12px;
     width: 100%;
     border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* --- Chat Box Animated Shimmer Bar --- */
+.chat-input-container::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2.5px;
+    background: linear-gradient(90deg, #f6c86a 0%, #38bdf8 40%, #818cf8 70%, #f6c86a 100%);
+    background-size: 250% 100%;
+    animation: chatBoxShimmer 1.8s linear infinite;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+    box-shadow: 0 0 8px rgba(246, 200, 106, 0.35);
+}
+
+.chat-input-container.generating::after {
+    opacity: 1;
+}
+
+@keyframes chatBoxShimmer {
+    0% { background-position: 0% 0; }
+    100% { background-position: 250% 0; }
 }
 
 .input-footer {
@@ -1285,6 +1348,8 @@ body {
     }
 
     .chat-input-container {
+        position: relative;
+        overflow: hidden;
         display: flex;
         align-items: flex-end;
         padding: 6px 6px 6px 14px;
