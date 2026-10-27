@@ -263,27 +263,34 @@ document.addEventListener("touchend", (e) => {
 
 
 function updateUIState() {
-
+    const isCurrentGenerating = loadingChats.has(currentChatId);
 
     // Check if the chat on our screen is currently in the loading list
-    if (loadingChats.has(currentChatId)) {
-
+    if (isCurrentGenerating) {
         HandleChatInputState(Disable=1);
-
     } else {
-
         HandleChatInputState(Disable=0);
+    }
 
+    // Toggle top animated generating bar (Gemini style)
+    const bar = document.getElementById("chat-generating-bar");
+    if (bar) {
+        if (isCurrentGenerating) {
+            bar.classList.add("active");
+        } else {
+            bar.classList.remove("active");
+        }
     }
     
     // Toggle Welcome Screen vs Chat History
-
-    
     if (currentChatId === null) {
         SwitchTab(Welcome = 1);
     } else {
         SwitchTab(Welcome = 0);
     }
+
+    // Update sidebar chat items so the specific generating chat shows its animated bar
+    UpdateChats();
 }
 
 async function loadRealHistory() {
@@ -386,6 +393,7 @@ async function loadAllChats(isInitialBoot = false){
 }
 function UpdateChats(){
 const ChatsContainer = document.querySelector(".chat-list");
+if (!ChatsContainer) return;
 ChatsContainer.innerHTML ="";
 ChatsContainer.innerHTML +=`<div class="chat-list-header">Recent Chats</div>`;
 
@@ -399,11 +407,16 @@ ChatsContainer.innerHTML +=`<div class="chat-list-header">Recent Chats</div>`;
           activeClass = "active";
       }
 
+      const isGenerating = loadingChats.has(chat.id);
+      const generatingClass = isGenerating ? "generating" : "";
+      const iconClass = isGenerating ? "fa-solid fa-circle-notch fa-spin chat-icon-spin" : "fa-regular fa-message";
+
       // Draw the button! Notice the onclick="switchChat(id)" magic trick
       ChatsContainer.innerHTML += `
-          <div class="chat-item ${activeClass}" onclick="switchChat(${chat.id})">
-              <i class="fa-regular fa-message"></i>
+          <div class="chat-item ${activeClass} ${generatingClass}" onclick="switchChat(${chat.id})">
+              <i class="${iconClass}"></i>
               <span class="chat-title">${chat.title}</span>
+              <div class="chat-item-generating-bar"></div>
               
               <!-- Smooth Overlay Actions Container -->
               <div class="chat-actions">
@@ -566,6 +579,19 @@ function UpdateChatHistory(){
             </div>
         </div>`;
     }
+
+    // Show sleek minimal AI generating bubble if this chat is actively generating
+    if (loadingChats.has(currentChatId)) {
+        container.innerHTML += `
+        <div class="message ai-message generating-bubble animate-pop" id="generating-indicator">
+            <div class="generating-dots">
+                <span class="generating-dot"></span>
+                <span class="generating-dot"></span>
+                <span class="generating-dot"></span>
+            </div>
+            <span class="generating-text">Generating response...</span>
+        </div>`;
+    }
     
     // Auto-scroll to the bottom when a new message is added
     container.scrollTop = container.scrollHeight;
@@ -725,6 +751,9 @@ function setChatLoading(chatId, isLoading) {
         loadingChats.delete(chatId);
     }
     updateUIState();
+    if (currentChatId === chatId) {
+        UpdateChatHistory();
+    }
 }
 
 async function ensureCurrentChat(userMessage) {

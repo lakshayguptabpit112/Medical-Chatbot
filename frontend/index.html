@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Medical Chatbot</title>
-    <link rel="stylesheet" href="/frontend/style.css?v=12">
+    <link rel="stylesheet" href="/frontend/style.css?v=13">
     <!-- FontAwesome for the send icon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -82,6 +82,9 @@
                     <i class="fa-solid fa-pen-to-square"></i>
                 </button>
             </div>
+
+            <!-- Sleek Gemini/Claude style Animated Generating Line -->
+            <div id="chat-generating-bar" class="chat-generating-bar" aria-hidden="true"></div>
 
             <!-- Conversation view: loading stays inside this area only. -->
             <div class="chat-view" id="chat-view">
@@ -250,6 +253,6 @@
         </section>
     </div>
 
-    <script src="/frontend/script.js?v=9"></script>
+    <script src="/frontend/script.js?v=10"></script>
 </body>
 </html>

@@ -260,6 +260,33 @@ body {
     color: #a22c23 !important; 
 }
 
+/* --- Sidebar Chat Item Generating State --- */
+.chat-item-generating-bar {
+    display: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #f6c86a, #38bdf8, #f6c86a, transparent);
+    background-size: 200% 100%;
+    animation: sidebarShimmer 1.6s ease-in-out infinite;
+    border-radius: 0 0 6px 6px;
+}
+
+.chat-item.generating .chat-item-generating-bar {
+    display: block;
+}
+
+.chat-item.generating .chat-icon-spin {
+    color: #f6c86a !important;
+}
+
+@keyframes sidebarShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
 /* Main Chat Area */
 .main-chat {
     flex: 1;
@@ -275,6 +302,28 @@ body {
     padding: 20px 25px;
     /* Optional subtle border at bottom if needed */
     /* border-bottom: 1px solid rgba(255, 255, 255, 0.03); */
+}
+
+/* --- Sleek Animated Generating Bar (Gemini / Claude Style) --- */
+.chat-generating-bar {
+    display: none;
+    width: 100%;
+    height: 2.5px;
+    background: linear-gradient(90deg, #f6c86a 0%, #38bdf8 35%, #818cf8 70%, #f6c86a 100%);
+    background-size: 250% 100%;
+    animation: geminiBarMove 1.8s linear infinite;
+    box-shadow: 0 0 10px rgba(246, 200, 106, 0.45);
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.chat-generating-bar.active {
+    display: block;
+}
+
+@keyframes geminiBarMove {
+    0% { background-position: 0% 0; }
+    100% { background-position: 250% 0; }
 }
 
 .avatar-container {
@@ -426,6 +475,55 @@ body {
 
 .animate-pop {
     animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* --- Minimal AI Generating / Thinking Bubble --- */
+.generating-bubble {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px !important;
+    background-color: #272738 !important;
+    border-radius: 14px 14px 14px 4px !important;
+    border-left: 3px solid #f6c86a;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    width: fit-content;
+}
+
+.generating-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.generating-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #f6c86a;
+    border-radius: 50%;
+    animation: dotPulse 1.4s ease-in-out infinite both;
+}
+
+.generating-dot:nth-child(1) { animation-delay: -0.32s; }
+.generating-dot:nth-child(2) { animation-delay: -0.16s; }
+.generating-dot:nth-child(3) { animation-delay: 0s; }
+
+.generating-text {
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+}
+
+@keyframes dotPulse {
+    0%, 80%, 100% {
+        transform: scale(0.6);
+        opacity: 0.35;
+    }
+    40% {
+        transform: scale(1.15);
+        opacity: 1;
+    }
 }
 
 /* User Messages (Aligned Right, Solid background) */
