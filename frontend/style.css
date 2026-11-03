@@ -492,6 +492,31 @@ body {
     margin-right: 6px;
 }
 
+
+/* Attached image in message bubble */
+.msg-image-attachment {
+    margin-bottom: 8px;
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 240px;
+    max-height: 240px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.msg-image-attachment img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 8px;
+    transition: transform 0.2s ease;
+}
+
+.msg-image-attachment img:hover {
+    transform: scale(1.02);
+}
+
 /* The new inline footer for actions and time */
 .msg-footer {
     display: flex;
@@ -528,6 +553,120 @@ body {
 .msg-action-btn:hover {
     color: #ffffff;
 }
+
+/* --- Voice Overview Control --- */
+.voice-overview-control {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 2px 7px;
+    gap: 6px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.voice-overview-control:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+.voice-play-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.2s ease;
+}
+
+.voice-play-btn:hover {
+    color: #ffffff;
+}
+
+.voice-play-btn.playing {
+    color: #4ade80; /* Soft pleasant green */
+}
+
+.voice-play-btn.playing i {
+    animation: voice-pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes voice-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+.voice-play-btn.translating {
+    color: #f59e0b;
+}
+
+.voice-play-btn.translating i {
+    animation: voice-pulse 1.4s infinite ease-in-out;
+}
+
+.voice-play-btn.buffering {
+    color: #38bdf8;
+}
+
+.voice-play-btn.paused {
+    color: #fbbf24;
+}
+
+.voice-restart-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    padding: 0 3px;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.voice-restart-btn:hover {
+    color: #38bdf8;
+    transform: rotate(-30deg);
+}
+
+.voice-lang-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.12);
+    border: none;
+    border-radius: 6px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.voice-lang-toggle:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+/* Keep the footer visible whenever audio is playing on this message */
+.message.audio-playing .msg-footer {
+    opacity: 1 !important;
+}
+
+.message.audio-playing {
+    box-shadow: 0 0 12px rgba(74, 222, 128, 0.15);
+}
+
 
 /* Timestamp styling (No longer absolute!) */
 .timestamp {
@@ -619,6 +758,122 @@ body {
 .word-counter.limit-exceeded {
     color: #f87171;
     font-weight: 600;
+}
+
+
+/* --- Attachment Button in Chat Input --- */
+.chat-attach-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.chat-attach-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-attach-btn.has-file {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+}
+
+/* --- Image Preview Above Input --- */
+.image-preview-container {
+    width: 100%;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.image-preview-card {
+    display: inline-flex;
+    align-items: center;
+    background: #1e1e28;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 6px 12px;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    animation: fadeInPreview 0.2s ease;
+}
+
+@keyframes fadeInPreview {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.preview-thumb-wrapper {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #111116;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.preview-thumb-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.preview-thumb-wrapper .fa-file-pdf {
+    font-size: 20px;
+    color: #ef4444;
+}
+
+.preview-meta {
+    display: flex;
+    flex-direction: column;
+    max-width: 220px;
+}
+
+.preview-filename {
+    font-size: 12px;
+    color: #e2e8f0;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.preview-filesize {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.remove-image-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.remove-image-btn:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
 }
 
 #chat-input {
@@ -1471,4 +1726,666 @@ body {
         max-width: 100%;
         overflow: hidden;
     }
+}
+
+/* --- Interactive Clinical Clarification Cards (Native Chat Theme) --- */
+.clarification-intro-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 13px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: #e2e8f0;
+    line-height: 1.5;
+}
+
+.clarification-intro-banner i {
+    color: #a5b4fc;
+    font-size: 15px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.clarification-card {
+    margin: 8px 0 6px 0;
+    padding: 14px 16px;
+    background: rgba(30, 30, 48, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+    transition: opacity 0.28s ease, transform 0.28s ease, max-height 0.3s ease, margin 0.3s ease, padding 0.3s ease;
+    max-height: 500px;
+}
+
+.clarification-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.clarification-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.clarification-badge i {
+    color: #a5b4fc;
+}
+
+.clarification-skip-text-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+.clarification-skip-text-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.clarification-question-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: #ffffff;
+    line-height: 1.5;
+}
+
+.clarification-chips-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.clarification-chip-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+}
+
+.clarification-chip-btn:hover {
+    background: #3b3b5c;
+    border-color: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.clarification-chip-btn:active {
+    transform: translateY(0);
+}
+
+.clarification-chip-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #a5b4fc;
+    flex-shrink: 0;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.clarification-chip-btn:hover .chip-dot {
+    background-color: #ffffff;
+    transform: scale(1.2);
+}
+
+.clarification-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.clarification-footer-hint {
+    font-size: 11px;
+    color: #8a8a9a;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.clarification-skip-btn {
+    background: transparent;
+    border: none;
+    color: #8a8a9a;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.18s ease;
+}
+
+.clarification-skip-btn:hover {
+    color: #ffffff;
+}
+
+/* Refining State inside Clarification Card */
+.clarification-refining-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 4px;
+}
+
+.clarification-refining-spinner {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-top-color: #a5b4fc;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+.clarification-refining-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.clarification-refining-text .refine-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f1f5f9;
+}
+
+.clarification-refining-text .refine-sub {
+    font-size: 11.5px;
+    color: #94a3b8;
+}
+
+/* Fluid In-Place Collapse & Crossfade Animations */
+.clarification-fading-out {
+    opacity: 0 !important;
+    max-height: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-width: 0 !important;
+    transform: scaleY(0.9) translateY(-6px) !important;
+    transition: opacity 0.28s ease, max-height 0.3s ease, margin 0.3s ease, padding 0.3s ease, transform 0.28s ease !important;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.msg-text-fade-out {
+    opacity: 0 !important;
+    transform: translateY(-4px) !important;
+    transition: opacity 0.2s ease, transform 0.2s ease !important;
+}
+
+@keyframes answerRevealFade {
+    0% {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.answer-reveal-fade {
+    animation: answerRevealFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes questionStepIn {
+    0% {
+        opacity: 0;
+        transform: translateX(8px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.clarification-step-in {
+    animation: questionStepIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+
+/* ==============================================================================
+   MARKDOWN & CLINICAL TABLE STYLING
+   ============================================================================== */
+.msg-text {
+    width: 100%;
+    word-break: break-word;
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.msg-text p {
+    margin: 0 0 10px 0;
+    line-height: 1.65;
+}
+
+.msg-text p:last-child {
+    margin-bottom: 0;
+}
+
+.msg-text h1, .msg-text h2, .msg-text h3, .msg-text h4 {
+    margin: 16px 0 8px 0;
+    font-weight: 600;
+    color: #f1f5f9;
+}
+
+.msg-text h1 { font-size: 18px; }
+.msg-text h2 { font-size: 16px; }
+.msg-text h3 { font-size: 15px; }
+
+.msg-text ul, .msg-text ol {
+    margin: 8px 0 12px 20px;
+    padding: 0;
+}
+
+.msg-text li {
+    margin-bottom: 5px;
+    line-height: 1.55;
+}
+
+/* Beautiful Clinical Markdown Tables */
+.msg-text table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 14px 0;
+    font-size: 13px;
+    background: rgba(30, 41, 59, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    overflow-x: auto;
+    display: table;
+}
+
+.msg-text th, .msg-text td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.msg-text th:last-child, .msg-text td:last-child {
+    border-right: none;
+}
+
+.msg-text tr:last-child td {
+    border-bottom: none;
+}
+
+.msg-text th {
+    background: rgba(51, 65, 85, 0.6);
+    font-weight: 600;
+    color: #e2e8f0;
+    letter-spacing: 0.2px;
+}
+
+.msg-text tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.msg-text strong {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.msg-text em {
+    color: #cbd5e1;
+}
+
+@media (max-width: 768px) {
+    .msg-text table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+
+
+/* ==============================================================================
+   PDF ATTACHMENT CARD & MULTIMODAL MESSAGE MEDIA (2026)
+   ============================================================================== */
+.msg-pdf-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    max-width: 300px;
+    cursor: pointer;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+.msg-pdf-card:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(239, 68, 68, 0.6);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.2);
+}
+
+.msg-pdf-thumb-wrap {
+    position: relative;
+    width: 48px;
+    height: 60px;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #0f172a;
+}
+
+.msg-pdf-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.msg-pdf-badge {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    font-size: 8px;
+    font-weight: 700;
+    background: #ef4444;
+    color: #ffffff;
+    border-radius: 3px;
+    padding: 1px 3px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.msg-pdf-icon-badge {
+    width: 46px;
+    height: 52px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: #ef4444;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.msg-pdf-icon-badge span {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.msg-pdf-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.msg-pdf-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f8fafc;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.msg-pdf-sub {
+    font-size: 11px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ==============================================================================
+   ENHANCED CLINICAL SOURCES ACCORDION (CONSULTATION MEDIA & LITERATURE)
+   ============================================================================== */
+.source-header {
+    width: 100% !important;
+    justify-content: space-between !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: #94a3b8 !important;
+}
+
+.source-chevron {
+    transition: transform 0.25s ease;
+    font-size: 10px;
+    margin-left: auto;
+}
+
+.source-chevron.rotated {
+    transform: rotate(180deg);
+}
+
+.source-group-section {
+    margin-bottom: 12px;
+}
+
+.source-group-section:last-child {
+    margin-bottom: 0;
+}
+
+.source-group-divider {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.source-group-heading {
+    font-size: 11px;
+    font-weight: 600;
+    color: #38bdf8;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.source-group-divider .source-group-heading {
+    color: #c084fc;
+}
+
+.source-item-media {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.source-item-media.clickable-source {
+    cursor: pointer;
+}
+
+.source-item-media.clickable-source:hover {
+    background: rgba(56, 189, 248, 0.08);
+    border-color: rgba(56, 189, 248, 0.3);
+    transform: translateY(-1px);
+}
+
+.source-thumb-container {
+    width: 48px;
+    height: 56px;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.source-media-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.source-pdf-tag {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-size: 8px;
+    font-weight: 700;
+    background: #ef4444;
+    color: #ffffff;
+    border-radius: 2px;
+    padding: 1px 3px;
+}
+
+.source-pdf-icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ef4444;
+    font-size: 22px;
+}
+
+.source-doc-icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #38bdf8;
+    font-size: 20px;
+}
+
+.source-media-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.source-media-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.source-media-badge {
+    font-size: 10px;
+    font-weight: 700;
+    color: #38bdf8;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.source-view-hint {
+    font-size: 10px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.source-media-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.source-media-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 2px;
+    line-height: 1.3;
+}
+
+.source-item-literature {
+    padding: 8px 10px;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 8px;
+}
+
+.source-item-literature:last-child {
+    margin-bottom: 0;
+}
+
+.source-item-literature .source-page {
+    color: #c084fc;
+    font-weight: 600;
+    font-size: 11px;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.source-item-literature .source-text {
+    font-size: 11px;
+    color: #cbd5e1;
+    line-height: 1.4;
+    display: block;
 }
