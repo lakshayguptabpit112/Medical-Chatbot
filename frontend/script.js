@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 let history = [];
 
 //ALL CHATS ARE STORED IN THIS
@@ -22,6 +13,9 @@ let currentChatId = null;
 
 //Aborts Generation Request 
 let currentController = null;
+
+// --- UPGRADED DRAFT SYSTEM (Text + Attachments) ---
+const chatDrafts = {}; 
 
 
 // THIS IS SOME RANDOM DOM THINGY JO YAHA BAAD MEI THEEK KARUNGA
@@ -43,7 +37,8 @@ const registerView = document.getElementById("register-view");
 
 const chatLoading = document.getElementById("chat-loading");
 
-// --- Image & Report Attachment Elements ---
+
+// --- Attachment Elements & State ---
 const attachBtn = document.getElementById("attach-btn");
 const imageInput = document.getElementById("image-input");
 const imagePreviewContainer = document.getElementById("image-preview-container");
@@ -53,8 +48,17 @@ const previewFilename = document.getElementById("preview-filename");
 const previewFilesize = document.getElementById("preview-filesize");
 const removeImageBtn = document.getElementById("remove-image-btn");
 
-let selectedAttachmentFile = null;
-let selectedAttachmentDataUrl = null;
+let selectedAttachmentFile = null;      // Holds the raw File object for FormData upload
+let selectedAttachmentDataUrl = null;   // Holds the base64 or blob URL for instant preview
+
+// --- Voice Overview (TTS) State ---
+let activeAudio = null;
+let activeAudioUrl = null;
+let activePlayingBtn = null;
+let activeMessageContainer = null;
+let activeAudioMsgId = null;
+let activeAudioState = "idle"; // 'idle' | 'translating' | 'buffering' | 'playing' | 'paused'
+const translationPollers = new Map(); // messageId -> intervalId
 
 
 // 1. Select the element
@@ -79,98 +83,43 @@ const registerSuccess =
 
 
 
-function showChatLoading() { 
-    chatLoading.hidden = false; 
+function showChatLoading() {
+    chatLoading.hidden = false;
     chatInput.disabled = true;
 }
-function hideChatLoading() { 
-    chatLoading.hidden = true; 
-    if (!loadingChats.has(currentChatId)) {
-        chatInput.disabled = false;
-    }
+
+function hideChatLoading() {
+    chatLoading.hidden = true;
+    chatInput.disabled = false;
+}
+
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 sendBtn.onclick = sendMessage;
 
-// --- Attachment Handlers ---
-if (attachBtn && imageInput) {
-    attachBtn.onclick = () => {
-        imageInput.click();
-    };
-
+// Click paperclip -> trigger hidden file picker
+if (attachBtn) {
+    attachBtn.onclick = () => imageInput.click();
+}
+// File selected from file picker
+if (imageInput) {
     imageInput.onchange = (e) => {
         const file = e.target.files[0];
-        if (file) {
-            handleSelectedFile(file);
-        }
+        if (file) handleSelectedFile(file);
     };
 }
-
+// Click [X] -> clear attachment
 if (removeImageBtn) {
-    removeImageBtn.onclick = () => {
-        clearAttachment();
-    };
+    removeImageBtn.onclick = clearAttachment;
 }
-
-function formatFileSize(bytes) {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
-function handleSelectedFile(file) {
-    // Max 10MB limit
-    if (file.size > 10 * 1024 * 1024) {
-        alert("File size exceeds 10 MB limit.");
-        clearAttachment();
-        return;
-    }
-
-    selectedAttachmentFile = file;
-    if (previewFilename) previewFilename.textContent = file.name;
-    if (previewFilesize) previewFilesize.textContent = formatFileSize(file.size);
-
-    const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
-
-    if (isPdf) {
-        if (imagePreviewImg) imagePreviewImg.style.display = "none";
-        if (pdfPreviewIcon) pdfPreviewIcon.style.display = "block";
-        selectedAttachmentDataUrl = URL.createObjectURL(file);
-    } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            selectedAttachmentDataUrl = e.target.result;
-            if (imagePreviewImg) {
-                imagePreviewImg.src = selectedAttachmentDataUrl;
-                imagePreviewImg.style.display = "block";
-            }
-            if (pdfPreviewIcon) pdfPreviewIcon.style.display = "none";
-        };
-        reader.readAsDataURL(file);
-    }
-
-    if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
-    if (attachBtn) attachBtn.classList.add("has-file");
-}
-
-function clearAttachment() {
-    if (selectedAttachmentDataUrl && selectedAttachmentDataUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(selectedAttachmentDataUrl);
-    }
-    selectedAttachmentFile = null;
-    selectedAttachmentDataUrl = null;
-    if (imageInput) imageInput.value = "";
-    if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
-    if (imagePreviewImg) {
-        imagePreviewImg.src = "";
-        imagePreviewImg.style.display = "none";
-    }
-    if (pdfPreviewIcon) pdfPreviewIcon.style.display = "none";
-    if (attachBtn) attachBtn.classList.remove("has-file");
-}
-
-
-
 
 //LoadEverything AT REFRESH
 
@@ -201,11 +150,665 @@ function copyToInput(text) {
     chatInput.dispatchEvent(new Event('input')); 
 }
 
+
+
+function copyPromptFromMsg(btn) {
+    const msgBubble = btn.closest(".message") || btn.closest(".chat-message");
+    if (!msgBubble) return;
+    const textElem = msgBubble.querySelector(".msg-text") || msgBubble.querySelector(".message-content");
+    if (!textElem) return;
+    const rawText = textElem.innerText || textElem.textContent || "";
+    copyToInput(rawText);
+}
+
+
+function OnVoted(btn){
+
+    const cardEl = btn.closest(".clarification-card");
+    if (cardEl) {
+        cardEl.querySelectorAll("button").forEach(b => b.disabled = true);
+    }
+    const msgIdx = parseInt(btn.getAttribute("data-msg-idx"), 10);
+    const qIdx = parseInt(btn.getAttribute("data-q-idx"), 10);
+    const opt = btn.getAttribute("data-opt") || "";
+    handleClarificationAnswer(msgIdx, qIdx, opt);
+}
+window.onClarificationChipClick = OnVoted;
+
+function handleClarificationAnswer(msgIndex, qIndex, selectedOption) {
+    const msg = history[msgIndex];
+    if (!msg || !msg.clarification || !msg.clarification.questions || !msg.clarification.questions[qIndex]) return;
+    
+    if (!msg.clarification.userAnswers) {
+        msg.clarification.userAnswers = [];
+    }   
+    const currentQ = msg.clarification.questions[qIndex];
+
+    if (currentQ) {
+        msg.clarification.userAnswers.push({ 
+            question: currentQ.question, 
+            selected_option: selectedOption 
+        });
+    }
+    const totalQ = msg.clarification.questions.length;
+    const cardEl = document.getElementById(`clarification-card-${msgIndex}`);
+    
+    // Check: Are there more questions?
+    if (qIndex + 1 < totalQ) {
+        // More questions remaining -> slide to next question!
+        if (cardEl) cardEl.classList.add("clarification-fading-out");
+        setTimeout(() => {
+            msg.clarification.currentIndex = qIndex + 1;
+            msg.clarification._stepIn = true;
+            UpdateChatHistory();
+        }, 180);
+    } else {
+        finishClarification(msgIndex);
+    }
+}
+
+function skipSingleClarification(msgIndex, qIndex) {    
+    const msg = history[msgIndex];
+    if (!msg || !msg.clarification || !msg.clarification.questions || !msg.clarification.questions[qIndex]) return;
+
+    const totalQ = msg.clarification.questions.length;
+    const cardEl = document.getElementById(`clarification-card-${msgIndex}`);
+    
+    if (qIndex + 1 < totalQ) {
+        if (cardEl) cardEl.classList.add("clarification-fading-out");
+        setTimeout(() => {
+            msg.clarification.currentIndex = qIndex + 1;
+            msg.clarification._stepIn = true;
+            UpdateChatHistory();
+        }, 180);
+    } else {
+        finishClarification(msgIndex);
+    }
+}
+
+function hasmeaningfulAnswers(answers) {
+    // If no answers exist, return false
+    if (!answers || answers.length === 0) return false;
+    for (let i = 0; i < answers.length; i++) {
+        const text = answers[i].selected_option;
+        
+        // Safety check: skip if blank
+        if (!text) continue;
+        const option = text.toLowerCase();
+        // Check if the answer is one of the vague non-answers:
+        const isVague = option.includes("not sure") ||
+                        option.includes("skip") ||
+                        option.includes("don't know") ||
+                        option.includes("none of these");
+        // If it is NOT vague, we found a real medical answer!
+        if (!isVague) {
+            return true;
+        }
+    }
+    return false;
+}
+function skipAllClarifications(msgIndex) {
+    const msg = history[msgIndex];
+    if (!msg || !msg.clarification) return;
+    revealFinalConsultation(msgIndex, msg.content);
+}
+function getLoadingOnQuestionCard() {
+    return `
+        <div class="clarification-refining-box">
+            <div class="clarification-refining-spinner"></div>
+            <div class="clarification-refining-text">
+                <span class="refine-title">Refining clinical consultation...</span>
+                <span class="refine-sub">Cross-referencing confirmed details with medical literature.</span>
+            </div>
+        </div>
+    `;
+}
+
+async function finishClarification(msgIndex) {
+
+    const msg = history[msgIndex];
+    if(!msg || !msg.clarification) return;
+    const answers  = msg.clarification.userAnswers || [];
+    const hasMeaningfulAnswers = hasmeaningfulAnswers(answers);
+  
+    if (!hasMeaningfulAnswers) {
+        revealFinalConsultation(msgIndex, msg.content);
+        return;
+    }
+    const cardEl = document.getElementById(`clarification-card-${msgIndex}`);
+    if (cardEl) {
+    cardEl.querySelectorAll("button").forEach(b => b.disabled = true);
+    cardEl.innerHTML = getLoadingOnQuestionCard(); // Clean, 1-liner! ✨  
+    }
+    // 3. Ask Python to rewrite the advice with the confirmed details
+    try {
+        const response = await fetch("/message/refine", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                message_id: msg.id,
+                chat_id: currentChatId,
+                clarifications: answers
+            })
+        });
+        const data = await response.json();
+        const refined = (data && data.refined_content) ? data.refined_content : msg.content;
+        revealFinalConsultation(msgIndex, refined);
+    } catch (err) {
+        // Fallback: If network glitch, still show the original consultation!
+        console.error("Clinical refinement failed:", err);
+        revealFinalConsultation(msgIndex, msg.content);
+    }
+}
+
+function revealFinalConsultation(msgIndex, finalContent = null) {
+    const msg = history[msgIndex];
+    if (!msg) return;
+
+    // 1. Mark clarification as resolved in memory
+    if (msg.clarification) {
+        msg.clarification.resolved = true;
+        msg.clarification.isRefining = false;
+    }
+    // If Python returned a newly refined consultation, update msg.content
+    if (finalContent) {
+        msg.content = finalContent;
+    }
+
+    const cardEl = document.getElementById(`clarification-card-${msgIndex}`);
+    const textEl = document.getElementById(`msg-text-${msgIndex}`);
+    const sourcesEl = document.getElementById(`msg-sources-${msgIndex}`);
+    const footerEl = document.getElementById(`msg-footer-${msgIndex}`);
+
+    // 2. Smoothly dissolve and delete the question card
+    if (cardEl) {
+        cardEl.classList.add("clarification-fading-out");
+        setTimeout(() => {
+            if (cardEl.parentNode) cardEl.remove();
+        }, 300);
+    }
+
+    // 3. Crossfade the message text into the full consultation Markdown!
+    if (textEl) {
+        textEl.classList.add("msg-text-fade-out");
+        setTimeout(() => {
+            textEl.innerHTML = renderMarkdown(msg.content);
+            textEl.classList.remove("msg-text-fade-out");
+            textEl.classList.add("answer-reveal-fade");
+        }, 200);
+    }
+
+    // 4. Reveal sources & footer actions
+    if (sourcesEl) {
+        sourcesEl.style.display = "flex";
+        sourcesEl.classList.add("answer-reveal-fade");
+    }
+    if (footerEl) {
+        footerEl.style.display = "flex";
+        footerEl.classList.add("answer-reveal-fade");
+    }
+
+    // 5. Scroll chat to bottom so the patient can read the answer
+    const chatContainer = document.querySelector(".chat-history");
+    if (chatContainer) {
+        setTimeout(() => {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }, 250);
+    }
+}
+
+// Helper: Renders footer
+function renderMessageFooter(msgIndex, time, actionBtns, ShowFooter) {
+
+    const hiddenStyle = !ShowFooter ? ' style="display: none;"' : '';
+    return `
+        <div class="msg-footer" id="msg-footer-${msgIndex}"${hiddenStyle}>
+            <div class="msg-actions">${actionBtns}</div>
+            <div class="timestamp">${time}</div>
+        </div>
+    `;
+}
+
+// Helper: Renders the clarification question card with OnVoted chips
+function renderClarificationCard(msgIndex, clar) {
+    if (clar.isRefining) {
+        return `
+            <div class="clarification-card" id="clarification-card-${msgIndex}">
+                ${getLoadingOnQuestionCard()}
+            </div>
+        `;
+    }
+
+    const currentQ = clar.questions[clar.currentIndex || 0];
+    const qNum = (clar.currentIndex || 0) + 1;
+    const totalQ = clar.questions.length;
+
+    const chipsHtml = (currentQ.options || []).map(opt => `
+        <button type="button" class="clarification-chip-btn" data-msg-idx="${msgIndex}" data-q-idx="${clar.currentIndex || 0}" data-opt="${escapeHtml(opt)}" onclick="OnVoted(this)">
+            <span class="chip-dot"></span>
+            <span>${escapeHtml(opt)}</span>
+        </button>
+    `).join("");
+
+    const stepInClass = clar._stepIn ? " clarification-step-in" : "";
+    clar._stepIn = false;
+
+    return `
+    <div class="clarification-card${stepInClass}" id="clarification-card-${msgIndex}">
+        <div class="clarification-card-header">
+            <span class="clarification-badge">
+                <i class="fa-solid fa-stethoscope"></i> Verification needed (${qNum}/${totalQ})
+            </span>
+            <button type="button" class="clarification-skip-text-btn" onclick="skipAllClarifications(${msgIndex})">
+                Skip to consultation <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        </div>
+        <div class="clarification-question-text">${escapeHtml(currentQ.question)}</div>
+        <div class="clarification-chips-wrapper">${chipsHtml}</div>
+    </div>`;
+}
+
+// --- Doctor Voice Overview (TTS & Audio Controller) ---
+
+function getPreferredAudioLang() {
+    return localStorage.getItem("voice_overview_lang") || "hi";
+}
+
+function setPreferredAudioLang(lang) {
+    localStorage.setItem("voice_overview_lang", lang);
+    document.querySelectorAll(".voice-lang-badge").forEach(badge => {
+        badge.textContent = lang.toUpperCase();
+    });
+}
+
+function updateRestartButton(control, msgId, show) {
+    if (!control) return;
+    let restartBtn = control.querySelector(".voice-restart-btn");
+    if (show) {
+        if (!restartBtn) {
+            restartBtn = document.createElement("button");
+            restartBtn.className = "msg-action-btn voice-restart-btn";
+            restartBtn.title = "Restart from beginning";
+            restartBtn.innerHTML = `<i class="fa-solid fa-rotate-left"></i>`;
+            restartBtn.onclick = (e) => {
+                e.stopPropagation();
+                restartAudioOverview(msgId);
+            };
+            control.appendChild(restartBtn);
+        }
+    } else {
+        if (restartBtn) {
+            restartBtn.remove();
+        }
+    }
+}
+
+function stopCurrentAudio(resetState = true) {
+    if (activeAudio) {
+        activeAudio.pause();
+        activeAudio.onended = null;
+        activeAudio.onerror = null;
+        activeAudio = null;
+    }
+    if (activeAudioUrl) {
+        URL.revokeObjectURL(activeAudioUrl);
+        activeAudioUrl = null;
+    }
+    if (activePlayingBtn) {
+        const lang = getPreferredAudioLang();
+        const targetMsg = history.find(m => m.id === activeAudioMsgId);
+        const hasTranslation = Boolean(targetMsg && targetMsg.translations && (targetMsg.translations[lang] || targetMsg.translations.hi || targetMsg.translations.en));
+        
+        activePlayingBtn.classList.remove("playing", "paused", "buffering", "translating");
+        if (hasTranslation) {
+            activePlayingBtn.className = "msg-action-btn voice-play-btn";
+            activePlayingBtn.innerHTML = `<i class="fa-solid fa-headphones"></i> <span class="voice-label">Voice Overview</span>`;
+        } else {
+            activePlayingBtn.className = "msg-action-btn voice-play-btn translating";
+            activePlayingBtn.innerHTML = `<i class="fa-solid fa-language fa-fade"></i> <span class="voice-label">Translating...</span>`;
+        }
+        
+        const control = activePlayingBtn.closest(".voice-overview-control");
+        if (control) {
+            updateRestartButton(control, activeAudioMsgId, false);
+        }
+        activePlayingBtn = null;
+    }
+    if (activeMessageContainer) {
+        activeMessageContainer.classList.remove("audio-playing");
+        activeMessageContainer = null;
+    }
+    if (resetState) {
+        activeAudioMsgId = null;
+        activeAudioState = "idle";
+    }
+}
+
+function restartAudioOverview(msgId) {
+    if (activeAudio && activeAudioMsgId === msgId) {
+        activeAudio.currentTime = 0;
+        activeAudio.play();
+        activeAudioState = "playing";
+        if (activePlayingBtn) {
+            activePlayingBtn.className = "msg-action-btn voice-play-btn playing";
+            activePlayingBtn.innerHTML = `<i class="fa-solid fa-pause"></i> <span class="voice-label">Pause</span>`;
+        }
+    }
+}
+
+function ensureTranslationPoller(msgId) {
+    if (!msgId || translationPollers.has(msgId)) return;
+
+    let attempts = 0;
+    const maxAttempts = 15; // 15 * 1.5s = ~22 seconds max
+
+    const intervalId = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+            clearInterval(intervalId);
+            translationPollers.delete(msgId);
+            return;
+        }
+
+        try {
+            const res = await fetch(`/message/translations/${msgId}`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            if (data.is_ready) {
+                clearInterval(intervalId);
+                translationPollers.delete(msgId);
+
+                const targetMsg = history.find(m => m.id === msgId);
+                if (targetMsg) {
+                    targetMsg.translations = data.translations;
+                }
+
+                if (activeAudioMsgId === msgId && activeAudioState === "translating") {
+                    startStreamingAudio(msgId);
+                } else {
+                    const control = document.querySelector(`.voice-overview-control[data-msg-id="${msgId}"]`);
+                    if (control) {
+                        const playBtn = control.querySelector(".voice-play-btn");
+                        if (playBtn && activeAudioMsgId !== msgId) {
+                            playBtn.className = "msg-action-btn voice-play-btn";
+                            playBtn.innerHTML = `<i class="fa-solid fa-headphones"></i> <span class="voice-label">Voice Overview</span>`;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`Translation poller notice for msg ${msgId}:`, e);
+        }
+    }, 1500);
+
+    translationPollers.set(msgId, intervalId);
+}
+
+async function startStreamingAudio(msgId) {
+    const control = document.querySelector(`.voice-overview-control[data-msg-id="${msgId}"]`);
+    const btn = control ? control.querySelector(".voice-play-btn") : activePlayingBtn;
+    const parentMsg = control ? control.closest(".message") : activeMessageContainer;
+
+    if (!btn) return;
+
+    activeAudioMsgId = msgId;
+    activePlayingBtn = btn;
+    activeMessageContainer = parentMsg;
+    activeAudioState = "buffering";
+
+    if (parentMsg) parentMsg.classList.add("audio-playing");
+    btn.className = "msg-action-btn voice-play-btn buffering";
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> <span class="voice-label">Loading Audio...</span>`;
+    updateRestartButton(control, msgId, false);
+
+    const lang = getPreferredAudioLang();
+    const rawText = parentMsg ? (parentMsg.querySelector(".msg-text")?.innerText || "") : "";
+
+    try {
+        const payload = {
+            message_id: msgId,
+            text: rawText,
+            target_lang: lang
+        };
+
+        const response = await fetch("/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+        }
+
+        const blob = await response.blob();
+
+        if (activeAudioMsgId !== msgId || activeAudioState !== "buffering") {
+            return;
+        }
+
+        if (activeAudioUrl) {
+            URL.revokeObjectURL(activeAudioUrl);
+        }
+        activeAudioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(activeAudioUrl);
+
+        activeAudio = audio;
+        activeAudioState = "playing";
+
+        btn.className = "msg-action-btn voice-play-btn playing";
+        btn.innerHTML = `<i class="fa-solid fa-pause"></i> <span class="voice-label">Pause</span>`;
+        updateRestartButton(control, msgId, true);
+
+        audio.onended = () => {
+            stopCurrentAudio();
+        };
+
+        audio.onerror = (e) => {
+            console.error("Audio playback error:", e);
+            stopCurrentAudio();
+        };
+
+        await audio.play();
+    } catch (err) {
+        console.error("Failed to stream audio overview:", err);
+        stopCurrentAudio();
+    }
+}
+
+async function toggleAudioOverview(btn, msgId) {
+    const parsedId = (msgId && msgId !== "null" && msgId !== "undefined" && !isNaN(parseInt(msgId))) ? parseInt(msgId) : null;
+    const control = btn.closest(".voice-overview-control");
+    const parentMsg = btn.closest(".message");
+
+    if (activeAudioMsgId === parsedId && parsedId !== null) {
+        if (activeAudioState === "playing" && activeAudio) {
+            activeAudio.pause();
+            activeAudioState = "paused";
+            btn.className = "msg-action-btn voice-play-btn paused";
+            btn.innerHTML = `<i class="fa-solid fa-play"></i> <span class="voice-label">Resume</span>`;
+            updateRestartButton(control, parsedId, true);
+            return;
+        } else if (activeAudioState === "paused" && activeAudio) {
+            activeAudio.play();
+            activeAudioState = "playing";
+            btn.className = "msg-action-btn voice-play-btn playing";
+            btn.innerHTML = `<i class="fa-solid fa-pause"></i> <span class="voice-label">Pause</span>`;
+            updateRestartButton(control, parsedId, true);
+            return;
+        } else if (activeAudioState === "translating" || activeAudioState === "buffering") {
+            stopCurrentAudio();
+            return;
+        }
+    }
+
+    stopCurrentAudio();
+
+    const lang = getPreferredAudioLang();
+    const targetMsg = history.find(m => m.id === parsedId);
+    const hasTranslation = Boolean(targetMsg && targetMsg.translations && (targetMsg.translations[lang] || targetMsg.translations.hi || targetMsg.translations.en));
+
+    activeAudioMsgId = parsedId;
+    activePlayingBtn = btn;
+    activeMessageContainer = parentMsg;
+    if (parentMsg) parentMsg.classList.add("audio-playing");
+
+    if (hasTranslation) {
+        await startStreamingAudio(parsedId);
+    } else {
+        activeAudioState = "translating";
+        btn.className = "msg-action-btn voice-play-btn translating";
+        btn.innerHTML = `<i class="fa-solid fa-language fa-fade"></i> <span class="voice-label">Translating...</span>`;
+        updateRestartButton(control, parsedId, false);
+        ensureTranslationPoller(parsedId);
+    }
+}
+
+function toggleOverviewLanguage(event, toggleBtn, msgId) {
+    event.stopPropagation();
+    const currentLang = getPreferredAudioLang();
+    const newLang = currentLang === "hi" ? "en" : "hi";
+    setPreferredAudioLang(newLang);
+
+    if (activeAudioMsgId === msgId) {
+        stopCurrentAudio();
+        const control = toggleBtn.closest(".voice-overview-control");
+        const playBtn = control ? control.querySelector(".voice-play-btn") : null;
+        if (playBtn) {
+            toggleAudioOverview(playBtn, msgId);
+        }
+    }
+}
+
+// Helper: Renders Doctor Voice Overview audio button + language switcher for AI message
+function renderVoiceControl(msg) {
+    const msgId = msg.id;
+    const msgTranslations = msg.translations || {};
+    const currentLang = getPreferredAudioLang();
+    const langBadge = currentLang.toUpperCase();
+    const hasTranslation = Boolean(msgTranslations[currentLang] || msgTranslations.hi || msgTranslations.en);
+
+    let btnClass = "msg-action-btn voice-play-btn";
+    let btnContent = `<i class="fa-solid fa-headphones"></i> <span class="voice-label">Voice Overview</span>`;
+    let showRestart = false;
+
+    if (activeAudioMsgId === msgId) {
+        if (activeAudioState === "playing") {
+            btnClass += " playing";
+            btnContent = `<i class="fa-solid fa-pause"></i> <span class="voice-label">Pause</span>`;
+            showRestart = true;
+        } else if (activeAudioState === "paused") {
+            btnClass += " paused";
+            btnContent = `<i class="fa-solid fa-play"></i> <span class="voice-label">Resume</span>`;
+            showRestart = true;
+        } else if (activeAudioState === "buffering") {
+            btnClass += " buffering";
+            btnContent = `<i class="fa-solid fa-circle-notch fa-spin"></i> <span class="voice-label">Loading Audio...</span>`;
+        } else if (activeAudioState === "translating") {
+            btnClass += " translating";
+            btnContent = `<i class="fa-solid fa-language fa-fade"></i> <span class="voice-label">Translating...</span>`;
+        }
+    } else if (!hasTranslation && msgId) {
+        btnClass += " translating";
+        btnContent = `<i class="fa-solid fa-language fa-fade"></i> <span class="voice-label">Translating...</span>`;
+        ensureTranslationPoller(msgId);
+    }
+
+    const restartHtml = showRestart
+        ? `<button class="msg-action-btn voice-restart-btn" onclick="restartAudioOverview(${msgId})" title="Restart from beginning"><i class="fa-solid fa-rotate-left"></i></button>`
+        : "";
+
+    return `
+        <div class="voice-overview-control" data-msg-id="${msgId || ''}">
+            <button class="${btnClass}" onclick="toggleAudioOverview(this, ${msgId})" title="Listen to Doctor's Voice Overview">
+                ${btnContent}
+            </button>
+            ${restartHtml}
+            <button class="msg-action-btn voice-lang-toggle" onclick="toggleOverviewLanguage(event, this, ${msgId})" title="Switch language (Hindi / English)">
+                <span class="voice-lang-badge">${langBadge}</span>
+            </button>
+        </div>
+    `;
+}
+
+
+function handleSelectedFile(file) {
+    // 10MB limit check
+    if (file.size > 10 * 1024 * 1024) {
+        alert("File size exceeds 10 MB limit.");
+        clearAttachment();
+        return;
+    }
+    selectedAttachmentFile = file;
+    if (previewFilename) previewFilename.textContent = file.name;
+    if (previewFilesize) previewFilesize.textContent = formatFileSize(file.size);
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (isPdf) {
+        if (imagePreviewImg) imagePreviewImg.style.display = "none";
+        if (pdfPreviewIcon) pdfPreviewIcon.style.display = "block";
+        selectedAttachmentDataUrl = URL.createObjectURL(file);
+    } else {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            selectedAttachmentDataUrl = e.target.result;
+            if (imagePreviewImg) {
+                imagePreviewImg.src = selectedAttachmentDataUrl;
+                imagePreviewImg.style.display = "block";
+            }
+            if (pdfPreviewIcon) pdfPreviewIcon.style.display = "none";
+        };
+        reader.readAsDataURL(file);
+    }
+    if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
+    if (attachBtn) attachBtn.classList.add("has-file");
+}
+
+// Helper to convert saved base64 back into a real File object
+function dataURLtoFile(dataurl, filename, mimeType) {
+    if (!dataurl || !dataurl.startsWith("data:")) return null;
+    try {
+        const arr = dataurl.split(',');
+        const mime = mimeType || arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    } catch (e) {
+        console.warn("Could not restore file from draft:", e);
+        return null;
+    }
+}
+
+function clearAttachment(revokeUrl = true) {
+    if (revokeUrl && selectedAttachmentDataUrl && selectedAttachmentDataUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(selectedAttachmentDataUrl);
+    }
+    selectedAttachmentFile = null;
+    selectedAttachmentDataUrl = null;
+    if (imageInput) imageInput.value = "";
+    if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
+    if (imagePreviewImg) {
+        imagePreviewImg.src = "";
+        imagePreviewImg.style.display = "none";
+    }
+    if (pdfPreviewIcon) pdfPreviewIcon.style.display = "none";
+    if (attachBtn) attachBtn.classList.remove("has-file");
+}
 // Helper to get time in HH:MM AM/PM format
 function getCurrentTime() {
     const now = new Date();
     const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return now.toLocaleString('en-US', options).replace(' at ', ', ');
+}
+// Helper: format bytes into readable KB or MB
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1048576).toFixed(1) + " MB";
 }
 
 // Keep the active chat in memory and remember it across page refreshes.
@@ -217,6 +820,38 @@ function setCurrentChat(chatId) {
     } else {
         localStorage.setItem("savedChatId", chatId);
     }
+}
+
+// Makes the Textarea clean for Markdown rendering and prevents XSS attacks. If marked.js or DOMPurify are unavailable, it falls back to simple formatting.
+function renderMarkdown(text) {
+    if (!text) return ""; // 1. If text is empty or null, return nothing so it doesn't crash.
+    
+    try {
+        // 2. Check: Did marked.js load properly from the internet?
+        if (window.marked && typeof window.marked.parse === "function") {
+            
+            // 3. Translate the Markdown into HTML
+            const parsed = window.marked.parse(text);
+            
+            // 4. Pass it to the Security Guard to clean any dangerous tags
+            if (window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
+                return window.DOMPurify.sanitize(parsed);
+            }
+            return parsed;
+        }
+    } catch (e) {
+        console.warn("Marked.js error:", e);
+    }
+    
+    // 5. THE EMERGENCY BACKUP (Fallback)
+    // What if the user is offline, or the CDN internet is down?
+    // We use simple string replaces so bold (**) and newlines (\n) still format nicely!
+    return text
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+        .replace(/\n\n+/g, '<br><br>')
+        .replace(/\n/g, '<br>');
 }
 
 
@@ -265,29 +900,123 @@ function typeText(element, text, speed = 15) {
             const chatHistory = document.getElementById("chat-history");
             chatHistory.scrollTop = chatHistory.scrollHeight;
         } else {
-            // Once all characters are typed, stop the timer!
+            // Once all characters are typed, stop the timer and render rich markdown!
             clearInterval(timer);
+            element.innerHTML = renderMarkdown(text);
         }
     }, speed);
 }
 
-//main Functions
+// --- UPGRADED DRAFT SYSTEM (Text + Attachments) ---
 
-function saveDraft(chatId, text) {
-    if (text.trim() !== "") {
-        sessionStorage.setItem(`draft_${chatId}`, text);
-    } else {
-        sessionStorage.removeItem(`draft_${chatId}`);
+function dataURLtoFile(dataurl, filename, mimeType) {
+    if (!dataurl || !dataurl.startsWith("data:")) return null;
+    try {
+        const arr = dataurl.split(',');
+        const mime = mimeType || arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    } catch (e) {
+        console.warn("Could not restore file from draft:", e);
+        return null;
     }
 }
-function loadDraft(chatId) {
-    const draft = sessionStorage.getItem(`draft_${chatId}`);
-    if (draft) {
-        copyToInput(draft);
-        sessionStorage.removeItem(`draft_${chatId}`);
-    } else {
-        copyToInput("");
+
+function saveDraft(chatId) {
+    const key = chatId !== null ? String(chatId) : "new";
+    const text = chatInput ? chatInput.value : "";
+    const file = selectedAttachmentFile;
+    const dataUrl = selectedAttachmentDataUrl;
+
+    if (!text.trim() && !file) {
+        delete chatDrafts[key];
+        localStorage.removeItem(`draft_${key}`);
+        return;
     }
+
+    chatDrafts[key] = {
+        text: text,
+        file: file,
+        dataUrl: dataUrl,
+        fileName: file ? file.name : null,
+        fileSize: file ? file.size : null,
+        fileType: file ? file.type : null
+    };
+
+    try {
+        const persistData = {
+            text: text,
+            fileName: file ? file.name : null,
+            fileSize: file ? file.size : null,
+            fileType: file ? file.type : null,
+            dataUrl: (dataUrl && dataUrl.startsWith("data:") && dataUrl.length < 4 * 1024 * 1024) ? dataUrl : null
+        };
+        localStorage.setItem(`draft_${key}`, JSON.stringify(persistData));
+    } catch (e) {
+        console.warn("LocalStorage draft quota exceeded:", e);
+    }
+}
+
+function loadDraft(chatId) {
+    const key = chatId !== null ? String(chatId) : "new";
+    clearChatInput();
+    clearAttachment();
+
+    let draft = chatDrafts[key];
+    if (!draft) {
+        const saved = localStorage.getItem(`draft_${key}`);
+        if (saved) {
+            try {
+                draft = JSON.parse(saved);
+                if (draft.dataUrl && draft.fileName) {
+                    draft.file = dataURLtoFile(draft.dataUrl, draft.fileName, draft.fileType);
+                }
+            } catch (e) {
+                draft = null;
+            }
+        }
+    }
+
+    if (!draft) return;
+
+    if (draft.text) {
+        copyToInput(draft.text);
+    }
+
+    if (draft.file || draft.dataUrl) {
+        selectedAttachmentFile = draft.file || null;
+        selectedAttachmentDataUrl = draft.dataUrl || null;
+
+        if (previewFilename && draft.fileName) previewFilename.textContent = draft.fileName;
+        if (previewFilesize && draft.fileSize) previewFilesize.textContent = formatFileSize(draft.fileSize);
+
+        const isPdf = draft.fileType === "application/pdf" || (draft.fileName && draft.fileName.toLowerCase().endsWith(".pdf"));
+
+        if (isPdf) {
+            if (imagePreviewImg) imagePreviewImg.style.display = "none";
+            if (pdfPreviewIcon) pdfPreviewIcon.style.display = "block";
+        } else if (draft.dataUrl) {
+            if (imagePreviewImg) {
+                imagePreviewImg.src = draft.dataUrl;
+                imagePreviewImg.style.display = "block";
+            }
+            if (pdfPreviewIcon) pdfPreviewIcon.style.display = "none";
+        }
+
+        if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
+        if (attachBtn) attachBtn.classList.add("has-file");
+    }
+}
+
+function clearDraft(chatId) {
+    const key = chatId !== null ? String(chatId) : "new";
+    delete chatDrafts[key];
+    localStorage.removeItem(`draft_${key}`);
 }
 
 
@@ -427,10 +1156,10 @@ async function initializeApp() {
 
         loginOverlay.hidden = true;
 
-        showChatLoading()
-        await UpdateUserInfo();
+        showChatLoading();
+        UpdateUserInfo(userData);
         await loadAllChats(true);
-        hideChatLoading()
+        hideChatLoading();
   
 
     } catch (error) {
@@ -439,49 +1168,58 @@ async function initializeApp() {
 }
 
 
-async function UpdateUserInfo() {
-    const response = await fetch("/users/me");
-    const userData = await response.json();
+function UpdateUserInfo(userData = null) {
+    if (!userData) return;
 
-    // 2. Change the name
-    profileNameElement.textContent = userData.username;
+    // 1. Change the name
+    if (profileNameElement && userData.username) {
+        profileNameElement.textContent = userData.username;
+    }
 
-    // 3. Update avatar with Google photo if available
+    // 2. Update avatar using /avatar/me backend proxy (bypasses referrer blocks and adblockers)
     const avatarImg = document.querySelector(".sidebar-profile-avatar img");
-    if (avatarImg && userData.picture_url) {
-        avatarImg.src = userData.picture_url;
+    if (avatarImg) {
+        avatarImg.referrerPolicy = "no-referrer";
+        avatarImg.setAttribute("referrerpolicy", "no-referrer");
+        avatarImg.onerror = function() {
+            this.onerror = null;
+            this.src = "/avatar/me";
+        };
+        avatarImg.src = "/avatar/me";
     }
 }
 
-async function loadAllChats(isInitialBoot = false) {
-    const response = await fetch("/chats");
-    const fetchedChats = await response.json();
-    chats = fetchedChats;
+async function loadAllChats(isInitialBoot = false){
+    const response = await fetch("/chats"); 
+    const fetchedChats = await response.json(); 
 
+    chats = fetchedChats;
+    
     if (chats.length === 0) {
-        createNewChat(); // No chats exist -> pure new chat
+        setCurrentChat(null);
+        updateUIState();
+        UpdateChats();
         return;
     }
 
-    if (isInitialBoot) {
+    // Only restore previous chat on initial page boot
+    if (isInitialBoot && currentChatId === null && chats.length > 0) {
         const savedId = localStorage.getItem("savedChatId");
         let chatExists = false;
-
         if (savedId) {
-            for (let chat of chats) {
-                if (chat.id == savedId) {
-                chatExists = true;
-                break; 
+            for (let i = 0; i < chats.length; i++) {
+                if (chats[i].id == savedId) {
+                    chatExists = true;
+                    break;
                 }
             }
         }
-
+        
         if (chatExists) {
-            // Restore previous chat AND WAIT for messages to draw before unlocking input!
-            await switchChat(parseInt(savedId));
+            switchChat(parseInt(savedId));
             return;
-        } else {
-            // User was on a New Chat before refresh -> cleanly show Welcome screen
+        }
+        else{
             createNewChat();
             return;
         }
@@ -550,7 +1288,7 @@ async function logout() {
     UpdateChatHistory(); 
     profileNameElement.textContent = "";
     const avatarImg = document.querySelector(".sidebar-profile-avatar img");
-    if (avatarImg) avatarImg.src = "https://cdn-icons-png.flaticon.com/512/3304/3304567.png";
+    if (avatarImg) avatarImg.src = "/avatar/me";
     
     const ChatsContainer = document.querySelector(".chat-list");
     if (ChatsContainer) ChatsContainer.innerHTML = "";
@@ -566,391 +1304,72 @@ async function deleteChat(event, chatId) {
     // 2. Tell Python to delete it
     await fetch(`/chats/${chatId}`, { method: "DELETE" });
     
-    // 3. If we just deleted the chat we were actively looking at, reset the ID!
+    // 3. Immediately clear draft for deleted chat
+    clearDraft(chatId);
+
+    // 4. If we just deleted the active chat, reset input and move to fresh chat
     if (currentChatId === chatId) {
+        clearChatInput();
+        clearAttachment();
         createNewChat();
     }
     
-    // 4. Reload the sidebar
+    // 5. Reload sidebar
     await loadAllChats();
 }
 
 function createNewChat() {
-    closeSidebarOnMobile();
-    setCurrentChat(null);
-    history = [];
-    UpdateChatHistory();
-    updateUIState();
-    UpdateChats();
-}
-
-async function switchChat(newChatId) {
     stopCurrentAudio();
     for (const [msgId, intervalId] of translationPollers.entries()) {
         clearInterval(intervalId);
     }
     translationPollers.clear();
     closeSidebarOnMobile();
-    if (currentChatId === newChatId) return;
-
-    if (currentChatId !== null) {
-        const currentInput = document.querySelector("#chat-input").value;
-        saveDraft(currentChatId, currentInput);
-    }
-
-    setCurrentChat(newChatId);
-    showChatLoading();
-    updateUIState();
-
+    saveDraft(currentChatId);
+    setCurrentChat(null);
     history = [];
     UpdateChatHistory();
+    updateUIState();
+    loadDraft(null);
+    UpdateChats(); 
+}
+
+function switchChat(newChatId) {
+    stopCurrentAudio();
+    for (const [msgId, intervalId] of translationPollers.entries()) {
+        clearInterval(intervalId);
+    }
+    translationPollers.clear();
+    closeSidebarOnMobile();
+    if (currentChatId === newChatId) return; 
+    
+    // Save current chat draft (text + attachment)
+    saveDraft(currentChatId);
+    
+    setCurrentChat(newChatId);
+    updateUIState();
+    
+    history = [];
+    UpdateChatHistory();
+
     loadDraft(newChatId);
 
     UpdateChats();
-    await loadRealHistory();
-    hideChatLoading();
-    updateUIState();
-}
-
-// --- AUDIO OVERVIEW CONTROLLER (Doctor Spoken Explanation) ---
-let activeAudio = null;
-let activeAudioUrl = null;
-let activePlayingBtn = null;
-let activeMessageContainer = null;
-let activeAudioMsgId = null;
-let activeAudioState = "idle"; // 'idle' | 'translating' | 'buffering' | 'playing' | 'paused'
-const translationPollers = new Map(); // messageId -> intervalId
-
-function getPreferredAudioLang() {
-    return localStorage.getItem("voice_overview_lang") || "hi";
-}
-
-function setPreferredAudioLang(lang) {
-    localStorage.setItem("voice_overview_lang", lang);
-    document.querySelectorAll(".voice-lang-badge").forEach(badge => {
-        badge.textContent = lang.toUpperCase();
-    });
-}
-
-function updateRestartButton(control, msgId, show) {
-    if (!control) return;
-    let restartBtn = control.querySelector(".voice-restart-btn");
-    if (show) {
-        if (!restartBtn) {
-            restartBtn = document.createElement("button");
-            restartBtn.className = "msg-action-btn voice-restart-btn";
-            restartBtn.title = "Restart from beginning";
-            restartBtn.innerHTML = `<i class="fa-solid fa-rotate-left"></i>`;
-            restartBtn.onclick = (e) => {
-                e.stopPropagation();
-                restartAudioOverview(msgId);
-            };
-            control.appendChild(restartBtn);
-        }
-    } else {
-        if (restartBtn) {
-            restartBtn.remove();
-        }
-    }
-}
-
-function stopCurrentAudio(resetState = true) {
-    if (activeAudio) {
-        activeAudio.pause();
-        activeAudio.onended = null;
-        activeAudio.onerror = null;
-        activeAudio = null;
-    }
-    if (activeAudioUrl) {
-        URL.revokeObjectURL(activeAudioUrl);
-        activeAudioUrl = null;
-    }
-    if (activePlayingBtn) {
-        const lang = getPreferredAudioLang();
-        const targetMsg = history.find(m => m.id === activeAudioMsgId);
-        const hasTranslation = Boolean(targetMsg && targetMsg.translations && (targetMsg.translations[lang] || targetMsg.translations.hi || targetMsg.translations.en));
-        
-        activePlayingBtn.classList.remove("playing", "paused", "buffering", "translating");
-        if (hasTranslation) {
-            activePlayingBtn.className = "msg-action-btn voice-play-btn";
-            activePlayingBtn.innerHTML = `<i class="fa-solid fa-headphones"></i> <span class="voice-label">Voice Overview</span>`;
-        } else {
-            activePlayingBtn.className = "msg-action-btn voice-play-btn translating";
-            activePlayingBtn.innerHTML = `<i class="fa-solid fa-language fa-fade"></i> <span class="voice-label">Translating...</span>`;
-        }
-        
-        const control = activePlayingBtn.closest(".voice-overview-control");
-        if (control) {
-            updateRestartButton(control, activeAudioMsgId, false);
-        }
-        activePlayingBtn = null;
-    }
-    if (activeMessageContainer) {
-        activeMessageContainer.classList.remove("audio-playing");
-        activeMessageContainer = null;
-    }
-    if (resetState) {
-        activeAudioMsgId = null;
-        activeAudioState = "idle";
-    }
-}
-
-function copyPromptFromMsg(btn) {
-    const parentMsg = btn.closest(".message");
-    const text = parentMsg ? (parentMsg.querySelector(".msg-text")?.innerText || "") : "";
-    copyToInput(text);
-}
-
-function restartAudioOverview(msgId) {
-    if (activeAudio && activeAudioMsgId === msgId) {
-        activeAudio.currentTime = 0;
-        activeAudio.play();
-        activeAudioState = "playing";
-        if (activePlayingBtn) {
-            activePlayingBtn.className = "msg-action-btn voice-play-btn playing";
-            activePlayingBtn.innerHTML = `<i class="fa-solid fa-pause"></i> <span class="voice-label">Pause</span>`;
-        }
-    }
-}
-
-function ensureTranslationPoller(msgId) {
-    if (!msgId || translationPollers.has(msgId)) return;
-
-    let attempts = 0;
-    const maxAttempts = 15; // 15 * 1.5s = ~22 seconds max
-
-    const intervalId = setInterval(async () => {
-        attempts++;
-        if (attempts > maxAttempts) {
-            clearInterval(intervalId);
-            translationPollers.delete(msgId);
-            return;
-        }
-
-        try {
-            const res = await fetch(`/message/translations/${msgId}`);
-            if (!res.ok) return;
-            const data = await res.json();
-
-            if (data.is_ready) {
-                clearInterval(intervalId);
-                translationPollers.delete(msgId);
-
-                // Update message in memory
-                const targetMsg = history.find(m => m.id === msgId);
-                if (targetMsg) {
-                    targetMsg.translations = data.translations;
-                }
-
-                // If user was actively waiting for this audio to start:
-                if (activeAudioMsgId === msgId && activeAudioState === "translating") {
-                    startStreamingAudio(msgId);
-                } else {
-                    // Update button UI to ready state!
-                    const control = document.querySelector(`.voice-overview-control[data-msg-id="${msgId}"]`);
-                    if (control) {
-                        const playBtn = control.querySelector(".voice-play-btn");
-                        if (playBtn && activeAudioMsgId !== msgId) {
-                            playBtn.className = "msg-action-btn voice-play-btn";
-                            playBtn.innerHTML = `<i class="fa-solid fa-headphones"></i> <span class="voice-label">Voice Overview</span>`;
-                        }
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn(`Translation poller notice for msg ${msgId}:`, e);
-        }
-    }, 1500);
-
-    translationPollers.set(msgId, intervalId);
-}
-
-async function startStreamingAudio(msgId) {
-    const control = document.querySelector(`.voice-overview-control[data-msg-id="${msgId}"]`);
-    const btn = control ? control.querySelector(".voice-play-btn") : activePlayingBtn;
-    const parentMsg = control ? control.closest(".message") : activeMessageContainer;
-
-    if (!btn) return;
-
-    activeAudioMsgId = msgId;
-    activePlayingBtn = btn;
-    activeMessageContainer = parentMsg;
-    activeAudioState = "buffering";
-
-    if (parentMsg) parentMsg.classList.add("audio-playing");
-    btn.className = "msg-action-btn voice-play-btn buffering";
-    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> <span class="voice-label">Loading Audio...</span>`;
-    updateRestartButton(control, msgId, false);
-
-    const lang = getPreferredAudioLang();
-    const rawText = parentMsg ? (parentMsg.querySelector(".msg-text")?.innerText || "") : "";
-
-    try {
-        const payload = {
-            message_id: msgId,
-            text: rawText,
-            target_lang: lang
-        };
-
-        const response = await fetch("/tts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Server returned ${response.status}`);
-        }
-
-        const blob = await response.blob();
-
-        // Ensure user didn't cancel or switch while loading
-        if (activeAudioMsgId !== msgId || activeAudioState !== "buffering") {
-            return;
-        }
-
-        if (activeAudioUrl) {
-            URL.revokeObjectURL(activeAudioUrl);
-        }
-        activeAudioUrl = URL.createObjectURL(blob);
-        const audio = new Audio(activeAudioUrl);
-
-        activeAudio = audio;
-        activeAudioState = "playing";
-
-        btn.className = "msg-action-btn voice-play-btn playing";
-        btn.innerHTML = `<i class="fa-solid fa-pause"></i> <span class="voice-label">Pause</span>`;
-        updateRestartButton(control, msgId, true);
-
-        audio.onended = () => {
-            stopCurrentAudio();
-        };
-
-        audio.onerror = (e) => {
-            console.error("Audio playback error:", e);
-            stopCurrentAudio();
-        };
-
-        await audio.play();
-    } catch (err) {
-        console.error("Failed to stream audio overview:", err);
-        stopCurrentAudio();
-    }
-}
-
-async function toggleAudioOverview(btn, msgId) {
-    const parsedId = (msgId && msgId !== "null" && msgId !== "undefined" && !isNaN(parseInt(msgId))) ? parseInt(msgId) : null;
-    const control = btn.closest(".voice-overview-control");
-    const parentMsg = btn.closest(".message");
-
-    // Case 1: Clicked on currently active audio
-    if (activeAudioMsgId === parsedId && parsedId !== null) {
-        if (activeAudioState === "playing" && activeAudio) {
-            // PAUSE
-            activeAudio.pause();
-            activeAudioState = "paused";
-            btn.className = "msg-action-btn voice-play-btn paused";
-            btn.innerHTML = `<i class="fa-solid fa-play"></i> <span class="voice-label">Resume</span>`;
-            updateRestartButton(control, parsedId, true);
-            return;
-        } else if (activeAudioState === "paused" && activeAudio) {
-            // RESUME
-            activeAudio.play();
-            activeAudioState = "playing";
-            btn.className = "msg-action-btn voice-play-btn playing";
-            btn.innerHTML = `<i class="fa-solid fa-pause"></i> <span class="voice-label">Pause</span>`;
-            updateRestartButton(control, parsedId, true);
-            return;
-        } else if (activeAudioState === "translating" || activeAudioState === "buffering") {
-            // CANCEL LOADING
-            stopCurrentAudio();
-            return;
-        }
-    }
-
-    // Case 2: Fresh click or different message clicked
-    stopCurrentAudio();
-
-    const lang = getPreferredAudioLang();
-    const targetMsg = history.find(m => m.id === parsedId);
-    const hasTranslation = Boolean(targetMsg && targetMsg.translations && (targetMsg.translations[lang] || targetMsg.translations.hi || targetMsg.translations.en));
-
-    activeAudioMsgId = parsedId;
-    activePlayingBtn = btn;
-    activeMessageContainer = parentMsg;
-    if (parentMsg) parentMsg.classList.add("audio-playing");
-
-    if (hasTranslation) {
-        // Translation is ready! Go straight to Audio Buffering & Streaming
-        await startStreamingAudio(parsedId);
-    } else {
-        // Translation is still being generated by LLM!
-        activeAudioState = "translating";
-        btn.className = "msg-action-btn voice-play-btn translating";
-        btn.innerHTML = `<i class="fa-solid fa-language fa-fade"></i> <span class="voice-label">Translating...</span>`;
-        updateRestartButton(control, parsedId, false);
-        // Start poller (or ensure it runs) to trigger playback once translation completes!
-        ensureTranslationPoller(parsedId);
-    }
-}
-
-function toggleOverviewLanguage(event, toggleBtn, msgId) {
-    event.stopPropagation();
-    const currentLang = getPreferredAudioLang();
-    const newLang = currentLang === "hi" ? "en" : "hi";
-    setPreferredAudioLang(newLang);
-
-    // If this message was playing or paused, restart playback in the newly selected language!
-    if (activeAudioMsgId === msgId) {
-        stopCurrentAudio();
-        const control = toggleBtn.closest(".voice-overview-control");
-        const playBtn = control ? control.querySelector(".voice-play-btn") : null;
-        if (playBtn) {
-            toggleAudioOverview(playBtn, msgId);
-        }
-    }
-}
-
-
-// Render Markdown into beautiful HTML (tables, headings, bold, bullet points)
-function renderMarkdown(text) {
-    if (!text) return "";
-    try {
-        if (window.marked && typeof window.marked.parse === "function") {
-            const parsed = window.marked.parse(text);
-            if (window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
-                return window.DOMPurify.sanitize(parsed);
-            }
-            return parsed;
-        }
-    } catch (e) {
-        console.warn("Marked.js error:", e);
-    }
-    // Safe built-in fallback parser
-    return text
-        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-        .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-        .replace(/\n\n+/g, '<br><br>')
-        .replace(/\n/g, '<br>');
-}
-
-function escapeHtml(text) {
-    if (!text) return "";
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
+    loadRealHistory(); 
 }
 
 function UpdateChatHistory(){
+
+    
     
     // Clear the container first
     container.innerHTML = "";
 
     // Loop through the array and inject the timestamp span
     for (let i = 0; i < history.length; i++) {
+
+        
+        
         const isClarificationActive = Boolean(
             history[i].role === "ai" &&
             history[i].clarification &&
@@ -1080,84 +1499,47 @@ function UpdateChatHistory(){
                 </button>
             `;
         } else if (history[i].role === "ai") {
-            let msgId = history[i].id ? history[i].id : null;
-            let currentLang = getPreferredAudioLang();
-            let langBadge = currentLang.toUpperCase();
-            const msgTranslations = history[i].translations || {};
-            const hasTranslation = Boolean(msgTranslations[currentLang] || msgTranslations.hi || msgTranslations.en);
-            
-            let btnClass = "msg-action-btn voice-play-btn";
-            let btnContent = `<i class="fa-solid fa-headphones"></i> <span class="voice-label">Voice Overview</span>`;
-            let showRestart = false;
-
-            if (activeAudioMsgId === msgId) {
-                if (activeAudioState === "playing") {
-                    btnClass += " playing";
-                    btnContent = `<i class="fa-solid fa-pause"></i> <span class="voice-label">Pause</span>`;
-                    showRestart = true;
-                } else if (activeAudioState === "paused") {
-                    btnClass += " paused";
-                    btnContent = `<i class="fa-solid fa-play"></i> <span class="voice-label">Resume</span>`;
-                    showRestart = true;
-                } else if (activeAudioState === "buffering") {
-                    btnClass += " buffering";
-                    btnContent = `<i class="fa-solid fa-circle-notch fa-spin"></i> <span class="voice-label">Loading Audio...</span>`;
-                } else if (activeAudioState === "translating") {
-                    btnClass += " translating";
-                    btnContent = `<i class="fa-solid fa-language fa-fade"></i> <span class="voice-label">Translating...</span>`;
-                }
-            } else if (!hasTranslation && msgId) {
-                // Background translation still pending for this message
-                btnClass += " translating";
-                btnContent = `<i class="fa-solid fa-language fa-fade"></i> <span class="voice-label">Translating...</span>`;
-                ensureTranslationPoller(msgId);
-            }
-
-            actionBtns = `
-                <div class="voice-overview-control" data-msg-id="${msgId || ''}">
-                    <button class="${btnClass}" onclick="toggleAudioOverview(this, ${msgId})" title="Listen to Doctor's Voice Overview">
-                        ${btnContent}
-                    </button>
-                    ${showRestart ? `<button class="msg-action-btn voice-restart-btn" onclick="restartAudioOverview(${msgId})" title="Restart from beginning"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
-                    <button class="msg-action-btn voice-lang-toggle" onclick="toggleOverviewLanguage(event, this, ${msgId})" title="Switch language (Hindi / English)">
-                        <span class="voice-lang-badge">${langBadge}</span>
-                    </button>
-                </div>
-            `;
+            actionBtns = renderVoiceControl(history[i]);
         }
-        
-        // Format message: AI messages are parsed as Markdown (tables, lists, headings)
-        let rawContent = history[i].content;
-        let formattedContent = "";
+
+        // Format content based on role: AI gets rich markdown, user & error get safe escaped HTML
+        let msgContent = "";
         if (history[i].role === "error") {
-            formattedContent = `<i class="fa-solid fa-triangle-exclamation"></i> ${rawContent}`;
-        } else if (isClarificationActive) {
-            formattedContent = `
-                <div class="clarification-intro-banner">
-                    <i class="fa-solid fa-file-prescription"></i>
-                    <span>I've reviewed your attached medical document. Because medical handwriting can be stylized, please help verify this detail before I finalize your full consultation:</span>
-                </div>
-            `;
-        } else if (history[i].role === "ai") {
-            formattedContent = renderMarkdown(rawContent);
-        } else {
-            formattedContent = escapeHtml(rawContent).replace(/\n/g, "<br>");
+            msgContent = `<i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(history[i].content)}`;
+        } 
+        else if (isClarificationActive) {
+         // 🩺 Show doctor intro banner instead of the full consultation text
+        msgContent = `
+        <div class="clarification-intro-banner">
+            <i class="fa-solid fa-stethoscope"></i>
+            <span>To provide the safest clinical guidance, please help clarify this detail before I finalize your full consultation:</span>
+        </div>
+        `;
+        }   
+        else if (history[i].role === "ai") {
+            msgContent = renderMarkdown(history[i].content);
+        }
+        else {
+            msgContent = escapeHtml(history[i].content);
         }
 
+        // Attachment HTML for user uploaded images or PDFs
         let attachmentHtml = "";
-        const fileUrl = history[i].file_url || history[i].image_url;
-        const thumbUrl = history[i].thumbnail_url || history[i].image_url;
-        const fileName = history[i].file_name || "Attached Medical Document";
-        const fileType = history[i].file_type || (fileUrl && fileUrl.toLowerCase().includes(".pdf") ? "pdf" : "image");
+        const attachUrl = history[i].attachmentUrl || history[i].file_url || history[i].image_url;
+        const thumbUrl = history[i].thumbnail_url;
+        const attachType = history[i].attachmentType || history[i].file_type || (attachUrl && attachUrl.toLowerCase().endsWith(".pdf") ? "pdf" : "image");
+        const attachName = history[i].attachmentName || history[i].file_name || "Attachment";
 
-        if (fileUrl || thumbUrl) {
-            if (fileType === "pdf") {
+        if (attachUrl || thumbUrl) {
+            const targetUrl = attachUrl || thumbUrl;
+            if (attachType === "pdf") {
                 const hasPageThumb = thumbUrl && !thumbUrl.toLowerCase().endsWith(".pdf") && !thumbUrl.startsWith("blob:");
+                const pdfTitle = escapeHtml(attachName || "Medical Report.pdf");
                 attachmentHtml = `
-                    <div class="msg-pdf-card" onclick="window.open('${fileUrl || thumbUrl}', '_blank')" title="Click to view ${escapeHtml(fileName)}">
+                    <div class="msg-pdf-card" onclick="window.open('${targetUrl}', '_blank')" title="Click to view ${pdfTitle}">
                         ${hasPageThumb ? `
                             <div class="msg-pdf-thumb-wrap">
-                                <img src="${thumbUrl}" alt="PDF Page Preview" class="msg-pdf-thumb-img" />
+                                <img src="${thumbUrl}" alt="PDF Page Preview" class="msg-pdf-thumb-img" loading="lazy" />
                                 <span class="msg-pdf-badge"><i class="fa-solid fa-file-pdf"></i> PDF</span>
                             </div>
                         ` : `
@@ -1167,86 +1549,31 @@ function UpdateChatHistory(){
                             </div>
                         `}
                         <div class="msg-pdf-details">
-                            <span class="msg-pdf-title">${escapeHtml(fileName)}</span>
+                            <span class="msg-pdf-title" title="${pdfTitle}">${pdfTitle}</span>
                             <span class="msg-pdf-sub"><i class="fa-solid fa-arrow-up-right-from-square"></i> Click to open PDF</span>
                         </div>
                     </div>
                 `;
             } else {
+                const safeName = escapeHtml(attachName || 'Attached Document');
                 attachmentHtml = `
-                    <div class="msg-image-attachment" onclick="window.open('${fileUrl || thumbUrl}', '_blank')" title="Click to view full image">
-                        <img src="${thumbUrl || fileUrl}" alt="${escapeHtml(fileName)}" />
+                    <div class="msg-image-attachment" onclick="window.open('${targetUrl}', '_blank')" title="Click to view full image">
+                        <img src="${thumbUrl || targetUrl}" alt="${safeName}" loading="lazy" decoding="async" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'msg-doc-fallback\\'><i class=\\'fa-solid fa-file-medical\\'></i> <span>${safeName}</span></div>';" />
                     </div>
                 `;
             }
         }
 
-        let clarificationHtml = "";
-        if (isClarificationActive) {
-            const clar = history[i].clarification;
-            clar.currentIndex = clar.currentIndex || 0;
-            const totalQ = clar.questions.length;
+        const clarificationHtml = isClarificationActive ? renderClarificationCard(i, history[i].clarification) : "";
 
-            if (clar.isRefining) {
-                clarificationHtml = `
-                <div class="clarification-card" id="clarification-card-${i}">
-                    <div class="clarification-refining-box">
-                        <div class="clarification-refining-spinner"></div>
-                        <div class="clarification-refining-text">
-                            <span class="refine-title">Refining clinical consultation...</span>
-                            <span class="refine-sub">Cross-referencing confirmed diagnosis with medical literature.</span>
-                        </div>
-                    </div>
-                </div>`;
-            } else {
-                const currentQ = clar.questions[clar.currentIndex] || clar.questions[0];
-                const qNum = (clar.currentIndex || 0) + 1;
-                const opts = currentQ.options || [];
-
-                const chipsHtml = opts.map(opt => `
-                    <button type="button" class="clarification-chip-btn" data-msg-idx="${i}" data-q-idx="${clar.currentIndex}" data-opt="${escapeHtml(opt)}" onclick="onClarificationChipClick(this)">
-                        <span class="chip-dot"></span>
-                        <span>${escapeHtml(opt)}</span>
-                    </button>
-                `).join("");
-
-                const stepInClass = clar._stepIn ? " clarification-step-in" : "";
-                clar._stepIn = false;
-
-                clarificationHtml = `
-                <div class="clarification-card${stepInClass}" id="clarification-card-${i}">
-                    <div class="clarification-card-header">
-                        <span class="clarification-badge">
-                            <i class="fa-solid fa-stethoscope"></i> Verification needed (${qNum}/${totalQ})
-                        </span>
-                        <button type="button" class="clarification-skip-text-btn" onclick="skipAllClarifications(${i})" title="Skip question and view consultation directly">
-                            Skip to consultation <i class="fa-solid fa-chevron-right"></i>
-                        </button>
-                    </div>
-                    <div class="clarification-question-text">
-                        ${escapeHtml(currentQ.question)}
-                    </div>
-                    <div class="clarification-chips-wrapper">
-                        ${chipsHtml}
-                    </div>
-                </div>`;
-            }
-        }
-
-        const revealClass = history[i]._justRevealed ? " answer-reveal-fade" : "";
-        history[i]._justRevealed = false;
-        const footerHiddenStyle = isClarificationActive ? ' style="display: none;"' : '';
-
+        // Inject cleanly into message bubble!
         container.innerHTML += `
-        <div class="message ${history[i].role}-message ${popClass}${revealClass}" id="msg-bubble-${i}">
+        <div class="message ${history[i].role}-message ${popClass}" id="msg-bubble-${i}">
             ${attachmentHtml}
-            <div class="msg-text" id="msg-text-${i}">${formattedContent}</div>
+            <div class="msg-text" id="msg-text-${i}">${msgContent}</div>
             ${clarificationHtml}
             ${sourceHtml}
-            <div class="msg-footer" id="msg-footer-${i}"${footerHiddenStyle}>
-                <div class="msg-actions">${actionBtns}</div>
-                <div class="timestamp">${history[i].time}</div>
-            </div>
+            ${renderMessageFooter(i, history[i].time, actionBtns, !isClarificationActive)}
         </div>`;
     }
     
@@ -1352,13 +1679,11 @@ registerForm.addEventListener("submit", async (event) => {
 showRegisterButton.addEventListener("click", () => {
     loginView.hidden = true;
     registerView.hidden = false;
-    initGoogleAuth();
 });
 
 showLoginButton.addEventListener("click", () => {
     registerView.hidden = true;
     loginView.hidden = false;
-    initGoogleAuth();
 });
 
 
@@ -1389,11 +1714,10 @@ chatInput.addEventListener('input', function() {
 function clearChatInput() {
     chatInput.value = "";
     chatInput.style.height = "auto";
-    clearAttachment();
     updateWordCounter();
 }
 
-function addMessageToHistory(role, content, sources = null, id = null, translations = {}, image_url = null, clarification = null, file_url = null, thumbnail_url = null, file_name = null, file_type = null) {
+function addMessageToHistory(role, content, sources = null, messageId = null, clarification = null) {
     let cleanClarification = clarification;
     if (cleanClarification && cleanClarification.needed && cleanClarification.questions && cleanClarification.questions.length > 0) {
         cleanClarification.currentIndex = 0;
@@ -1401,26 +1725,20 @@ function addMessageToHistory(role, content, sources = null, id = null, translati
         cleanClarification.resolved = false;
         cleanClarification.isRefining = false;
     }
-    history.push({
-        role,
-        content,
-        time: getCurrentTime(),
-        sources,
-        id,
-        translations,
-        image_url: image_url || thumbnail_url || file_url,
-        clarification: cleanClarification,
-        file_url: file_url || image_url,
-        thumbnail_url: thumbnail_url || image_url,
-        file_name,
-        file_type: file_type || (file_name && file_name.toLowerCase().endsWith(".pdf") ? "pdf" : (image_url ? "image" : null))
+    history.push({ 
+        role, 
+        content, 
+        time: getCurrentTime(), 
+        sources, 
+        id: messageId,
+        clarification: cleanClarification 
     });
     UpdateChatHistory();
 }
 
-function addMessageIfViewing(chatId, role, content, sources = null, id = null, translations = {}, image_url = null, clarification = null, file_url = null, thumbnail_url = null, file_name = null, file_type = null) {
+function addMessageIfViewing(chatId, role, content, sources = null, messageId = null, clarification = null) {
     if (currentChatId === chatId) {
-        addMessageToHistory(role, content, sources, id, translations, image_url, clarification, file_url, thumbnail_url, file_name, file_type);
+        addMessageToHistory(role, content, sources, messageId, clarification);
     }
 }
 
@@ -1445,13 +1763,12 @@ async function ensureCurrentChat(userMessage) {
     );
     const data = await response.json();
     setCurrentChat(data.id);
-    // Switch screen to normal chat immediately!
     updateUIState();
-    // Await sidebar update so state and list stay synchronized
     await loadAllChats();
 }
 async function requestBotReply(message, chatId, file = null) {
     if (file) {
+        // Send as multipart/form-data
         const formData = new FormData();
         formData.append("message", message || "");
         formData.append("chat_id", chatId);
@@ -1464,11 +1781,10 @@ async function requestBotReply(message, chatId, file = null) {
         });
         return response.json();
     } else {
+        // Normal JSON request
         const response = await fetch("/chat", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ message, chat_id: chatId }),
             signal: currentController.signal
         });
@@ -1486,24 +1802,21 @@ function pollForNewChatTitle(chatId) {
             clearInterval(titleChecker);
             return;
         }
-
         try {
             const response = await fetch("/chats");
             if (!response.ok) return;
             const freshChats = await response.json();
             const updatedChat = freshChats.find(chat => chat.id === chatId);
-
             if (updatedChat && updatedChat.title && updatedChat.title !== initialTitle) {
                 chats = freshChats;
                 UpdateChats();
                 clearInterval(titleChecker);
             }
-        } catch (e) {
-            // Network glitch during poll, continue next attempt
+        } catch (err) {
+            // Network glitch during polling, retry on next interval
         }
     }, 2000);
 }
-
 
 // --- THE STOP GENERATING FUNCTION ---
 async function stopGenerating() {
@@ -1515,14 +1828,18 @@ async function stopGenerating() {
     
     // 2. Tell Python to stop and save the cancellation error message
     await fetch(`/chat/stop/${currentChatId}`, { method: "POST" });
-    
-    // 3. Mark is_generating as false in local chats memory
-    const targetChat = chats.find(c => c.id === currentChatId);
-    if (targetChat) {
+
+    if (currentChatId) {
+
+        const targetChat = chats.find(c => c.id === currentChatId);
+
+        if (targetChat) {
         targetChat.is_generating = false;
+        }
     }
-    // 4. Unlock the UI and reload history from DB to get the error message
+    // 3. Unlock the UI and reload history from DB to get the error message
     setChatLoading(currentChatId, false);
+    UpdateChats();
     await loadRealHistory();
 }
 
@@ -1534,15 +1851,31 @@ async function sendMessage() {
     const attachedFileName = selectedAttachmentFile ? selectedAttachmentFile.name : null;
     const attachedFileType = selectedAttachmentFile ? (selectedAttachmentFile.type === "application/pdf" || selectedAttachmentFile.name.toLowerCase().endsWith(".pdf") ? "pdf" : "image") : null;
 
+    // Allow sending if there is text OR an attached file
     if (userMessage === "" && !attachedFile) return;
     if (userMessage.length > 500) return;
 
     clearChatInput();
-    const promptForChatTitle = userMessage || (attachedFile ? (attachedFileType === "pdf" ? "Medical PDF Report" : "Medical Document/Image") : "Medical Consultation");
+    clearAttachment(false); // Clears preview from input box while keeping preview URL for the chat bubble
+
+    clearDraft(null);
+
+    const promptForChatTitle = userMessage || (attachedFileType === "pdf" ? "Medical PDF Analysis" : "Medical Image Consultation");
     await ensureCurrentChat(promptForChatTitle);
-    addMessageToHistory("user", userMessage, null, null, {}, attachedDataUrl, null, attachedDataUrl, attachedDataUrl, attachedFileName, attachedFileType);
+
+    // Push message to local history with attachment metadata
+    history.push({
+        role: "user",
+        content: userMessage,
+        time: getCurrentTime(),
+        attachmentUrl: attachedDataUrl,
+        attachmentName: attachedFileName,
+        attachmentType: attachedFileType
+    });
+    UpdateChatHistory();
 
     const chatWeSentTo = currentChatId;
+    clearDraft(chatWeSentTo);
     setChatLoading(chatWeSentTo, true);
     currentController = new AbortController();
 
@@ -1555,27 +1888,20 @@ async function sendMessage() {
             return;
         }
 
-        // Update user message with persistent media URLs returned from server
-        if (data.user_attachment) {
-            for (let k = history.length - 1; k >= 0; k--) {
-                if (history[k].role === "user" && (history[k].file_url || history[k].image_url)) {
-                    history[k].file_url = data.user_attachment.file_url;
-                    history[k].thumbnail_url = data.user_attachment.thumbnail_url;
-                    history[k].file_name = data.user_attachment.file_name;
-                    history[k].file_type = data.user_attachment.file_type;
-                    UpdateChatHistory();
-                    break;
-                }
+        // Update sent user message with permanent server storage URL
+        if (data.user_attachment && history.length > 0) {
+            const userMsg = history.find(m => m.role === "user" && (m.attachmentName === attachedFileName || m.attachmentUrl === attachedDataUrl));
+            if (userMsg) {
+                userMsg.file_url = data.user_attachment.file_url;
+                userMsg.thumbnail_url = data.user_attachment.thumbnail_url;
+                userMsg.file_name = data.user_attachment.file_name;
+                userMsg.file_type = data.user_attachment.file_type;
+                userMsg.attachmentUrl = data.user_attachment.file_url;
             }
         }
 
-        const aiMessage = data.response ?? "There was an unexpected server error. Please refresh the page and try again.";
-        addMessageIfViewing(chatWeSentTo, "ai", aiMessage, data.sources, data.message_id, {}, null, data.clarification);
-
-        const targetChat = chats.find(c => c.id === chatWeSentTo);
-        if (targetChat) {
-            targetChat.is_generating = false;
-        }
+        const aiMessage = data.response ?? "There was an unexpected server error.";
+        addMessageIfViewing(chatWeSentTo, "ai", aiMessage, data.sources, data.message_id, data.clarification);
 
         if (currentChatId === chatWeSentTo) {
             pollForNewChatTitle(chatWeSentTo);
@@ -1587,65 +1913,45 @@ async function sendMessage() {
         }
     } finally {
         currentController = null;
+        setChatLoading(chatWeSentTo, false);
         const targetChat = chats.find(c => c.id === chatWeSentTo);
         if (targetChat) {
             targetChat.is_generating = false;
         }
-        setChatLoading(chatWeSentTo, false);
     }
 }
 // --- Google Sign-In Initialization & Callback ---
-async function initGoogleAuth(retries = 25) {
+async function initGoogleAuth() {
     try {
         const res = await fetch("/auth/google/client-id");
-        if (!res.ok) return;
         const { client_id } = await res.json();
         
-        if (!client_id) {
-            console.warn("[Google Auth]: No client_id configured.");
-            return;
-        }
-
-        // Retry until Google Identity Services (GSI) script is loaded
-        if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-            if (retries > 0) {
-                setTimeout(() => initGoogleAuth(retries - 1), 150);
-            } else {
-                console.warn("[Google Auth]: Google GSI script blocked or timed out.");
-            }
-            return;
-        }
+        if (!client_id || !window.google) return;
 
         google.accounts.id.initialize({
             client_id: client_id,
-            callback: handleGoogleCredentialResponse,
-            auto_select: false,
-            cancel_on_tap_outside: true
+            callback: handleGoogleCredentialResponse
         });
 
         // Render button in Login view
         const loginBtn = document.getElementById("google-login-btn");
         if (loginBtn) {
-            loginBtn.innerHTML = "";
             google.accounts.id.renderButton(loginBtn, {
                 theme: "filled_black",
                 size: "large",
                 width: 320,
-                shape: "rectangular",
-                text: "signin_with"
+                shape: "rectangular"
             });
         }
 
         // Render button in Register view
         const registerBtn = document.getElementById("google-register-btn");
         if (registerBtn) {
-            registerBtn.innerHTML = "";
             google.accounts.id.renderButton(registerBtn, {
                 theme: "filled_black",
                 size: "large",
                 width: 320,
-                shape: "rectangular",
-                text: "signup_with"
+                shape: "rectangular"
             });
         }
     } catch (e) {
@@ -1683,175 +1989,3 @@ async function handleGoogleCredentialResponse(response) {
 
 window.addEventListener("load", initGoogleAuth);
 
-
-// --- PRE-ANSWER CLARIFICATION ENGINE HANDLERS ---
-
-function onClarificationChipClick(btn) {
-    const msgIdx = parseInt(btn.getAttribute("data-msg-idx"), 10);
-    const qIdx = parseInt(btn.getAttribute("data-q-idx"), 10);
-    const opt = btn.getAttribute("data-opt") || "";
-    handleClarificationAnswer(msgIdx, qIdx, opt);
-}
-
-function handleClarificationAnswer(msgIndex, qIndex, selectedOption) {
-    const msg = history[msgIndex];
-    if (!msg || !msg.clarification) return;
-
-    if (!msg.clarification.userAnswers) {
-        msg.clarification.userAnswers = [];
-    }
-
-    const currentQ = msg.clarification.questions[qIndex];
-    if (currentQ) {
-        msg.clarification.userAnswers.push({
-            question: currentQ.question,
-            selected_option: selectedOption
-        });
-    }
-
-    const totalQ = msg.clarification.questions.length;
-    const cardEl = document.getElementById(`clarification-card-${msgIndex}`);
-
-    if (qIndex + 1 < totalQ) {
-        if (cardEl) cardEl.classList.add("clarification-fading-out");
-        setTimeout(() => {
-            msg.clarification.currentIndex = qIndex + 1;
-            msg.clarification._stepIn = true;
-            UpdateChatHistory();
-        }, 180);
-    } else {
-        finishClarification(msgIndex);
-    }
-}
-
-function skipSingleClarification(msgIndex, qIndex) {
-    const msg = history[msgIndex];
-    if (!msg || !msg.clarification) return;
-
-    const totalQ = msg.clarification.questions.length;
-    const cardEl = document.getElementById(`clarification-card-${msgIndex}`);
-
-    if (qIndex + 1 < totalQ) {
-        if (cardEl) cardEl.classList.add("clarification-fading-out");
-        setTimeout(() => {
-            msg.clarification.currentIndex = qIndex + 1;
-            msg.clarification._stepIn = true;
-            UpdateChatHistory();
-        }, 180);
-    } else {
-        finishClarification(msgIndex);
-    }
-}
-
-function skipAllClarifications(msgIndex) {
-    const msg = history[msgIndex];
-    if (!msg || !msg.clarification) return;
-    revealFinalConsultation(msgIndex, msg.content);
-}
-
-function revealFinalConsultation(msgIndex, finalContent = null) {
-    const msg = history[msgIndex];
-    if (!msg) return;
-    if (msg.clarification) {
-        msg.clarification.resolved = true;
-        msg.clarification.isRefining = false;
-    }
-    if (finalContent) {
-        msg.content = finalContent;
-    }
-
-    const cardEl = document.getElementById(`clarification-card-${msgIndex}`);
-    const textEl = document.getElementById(`msg-text-${msgIndex}`);
-    const sourcesEl = document.getElementById(`msg-sources-${msgIndex}`);
-    const footerEl = document.getElementById(`msg-footer-${msgIndex}`);
-
-    // 1. Collapse the clarification card smoothly
-    if (cardEl) {
-        cardEl.classList.add("clarification-fading-out");
-        setTimeout(() => {
-            if (cardEl.parentNode) cardEl.remove();
-        }, 300);
-    }
-
-    // 2. Crossfade text into the full consultation answer
-    if (textEl) {
-        textEl.classList.add("msg-text-fade-out");
-        setTimeout(() => {
-            textEl.innerHTML = renderMarkdown(msg.content);
-            textEl.classList.remove("msg-text-fade-out");
-            textEl.classList.add("answer-reveal-fade");
-        }, 200);
-    }
-
-    // 3. Reveal sources smoothly if present
-    if (sourcesEl) {
-        sourcesEl.style.display = "flex";
-        sourcesEl.classList.add("answer-reveal-fade");
-    }
-
-    // 4. Reveal footer actions smoothly
-    if (footerEl) {
-        footerEl.style.display = "flex";
-        footerEl.classList.add("answer-reveal-fade");
-    }
-
-    // Auto-scroll so user sees the newly expanded consultation
-    const chatContainer = document.querySelector(".chat-history");
-    if (chatContainer) {
-        setTimeout(() => {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }, 250);
-    }
-}
-
-async function finishClarification(msgIndex) {
-    const msg = history[msgIndex];
-    if (!msg || !msg.clarification) return;
-
-    const answers = msg.clarification.userAnswers || [];
-    const hasMeaningfulAnswer = answers.some(a => 
-        a.selected_option && !/not sure|skip|don't know|none of these|check with pharmacist/i.test(a.selected_option)
-    );
-
-    const cardEl = document.getElementById(`clarification-card-${msgIndex}`);
-
-    if (!hasMeaningfulAnswer) {
-        revealFinalConsultation(msgIndex, msg.content);
-        return;
-    }
-
-    // In-place smooth transition to refining status without destroying chat DOM
-    if (cardEl) {
-        cardEl.querySelectorAll("button").forEach(b => b.disabled = true);
-        cardEl.innerHTML = `
-            <div class="clarification-refining-box">
-                <div class="clarification-refining-spinner"></div>
-                <div class="clarification-refining-text">
-                    <span class="refine-title">Refining clinical consultation...</span>
-                    <span class="refine-sub">Cross-referencing confirmed details with medical literature.</span>
-                </div>
-            </div>
-        `;
-    }
-
-    try {
-        const response = await fetch("/message/refine", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                message_id: msg.id,
-                chat_id: currentChatId,
-                clarifications: answers
-            })
-        });
-
-        const data = await response.json();
-        const refined = (data && data.refined_content) ? data.refined_content : msg.content;
-        revealFinalConsultation(msgIndex, refined);
-    } catch (err) {
-        console.error("Clinical refinement failed:", err);
-        revealFinalConsultation(msgIndex, msg.content);
-    }
-}

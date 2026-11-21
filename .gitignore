@@ -19,5 +19,6 @@ wheels/
 
 # Uploaded patient media
 uploads/
-.ingestion_checkpoint.json
+output/
+
 

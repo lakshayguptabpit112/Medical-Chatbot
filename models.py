@@ -15,7 +15,7 @@ class User(Base):
     picture_url : Mapped[str | None] = mapped_column(String, nullable=True)
     created_at : Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
-    # Relationship to the Document model
+    # Relationship to the Chat model
     chats: Mapped[list[Chat]] = relationship(back_populates="owner")
 
 class Chat(Base):
@@ -27,7 +27,7 @@ class Chat(Base):
     is_generating : Mapped[bool] = mapped_column(Boolean, default=False)
     created_at : Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
-    # Relationship to the User model
+    # Relationships with auto-cleanup (cascade delete)
     owner: Mapped[User] = relationship(back_populates="chats")
     messages: Mapped[list[Message]] = relationship(back_populates="chat", cascade="all, delete-orphan")
     documents: Mapped[list[ChatDocument]] = relationship(back_populates="chat", cascade="all, delete-orphan")
@@ -40,12 +40,19 @@ class Message(Base):
     role : Mapped[str] = mapped_column(String)  # 'user', 'ai', or 'error'
     content : Mapped[str] = mapped_column(String)
     sources : Mapped[str] = mapped_column(String, nullable=True)
+
+    # Doctor Voice Translations: {"hi": "Hindi summary...", "en": "English summary..."}
     translations : Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
+
+    # Attachment metadata
     file_url : Mapped[str | None] = mapped_column(String, nullable=True)
     thumbnail_url : Mapped[str | None] = mapped_column(String, nullable=True)
     file_name : Mapped[str | None] = mapped_column(String, nullable=True)
     file_type : Mapped[str | None] = mapped_column(String, nullable=True)  # 'image' or 'pdf'
-    draft_content : Mapped[str | None] = mapped_column(String, nullable=True)  # Preserves initial unrefined consultation
+
+    # Clarification Safety: stores unrefined initial draft for clinical safety
+    draft_content : Mapped[str | None] = mapped_column(String, nullable=True)
+
     created_at : Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     # Relationship to the Chat model
@@ -72,75 +79,80 @@ class ChatDocument(Base):
     # Relationship to the Chat model
     chat: Mapped[Chat] = relationship(back_populates="documents")
 
-# --- CREATE THE TABLES ---
-Base.metadata.create_all(bind=engine)
+# --- DATABASE INITIALIZATION & MIGRATIONS ---
+def init_db():
+    """
+    Ensures tables exist and runs column migrations once on application startup.
+    Executed inside FastAPI startup hook rather than at module import time to prevent import stalling.
+    """
+    try:
+        Base.metadata.create_all(bind=engine)
+        inspector = inspect(engine)
+        if inspector.has_table('chats'):
+            chat_columns = [c['name'] for c in inspector.get_columns('chats')]
+            if 'is_generating' not in chat_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE chats ADD COLUMN is_generating BOOLEAN DEFAULT false"))
+                    conn.commit()
 
-# --- MIGRATIONS for existing databases ---
-inspector = inspect(engine)
-if inspector.has_table('chats'):
-    chat_columns = [c['name'] for c in inspector.get_columns('chats')]
-    if 'is_generating' not in chat_columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE chats ADD COLUMN is_generating BOOLEAN DEFAULT false"))
-            conn.commit()
+        if inspector.has_table('users'):
+            user_columns = [c['name'] for c in inspector.get_columns('users')]
+            if 'google_sub' not in user_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR"))
+                    conn.commit()
 
-if inspector.has_table('users'):
-    user_columns = [c['name'] for c in inspector.get_columns('users')]
-    if 'google_sub' not in user_columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR"))
-            conn.commit()
+            if 'picture_url' not in user_columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN picture_url VARCHAR"))
+                    conn.commit()
 
-    if 'picture_url' not in user_columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN picture_url VARCHAR"))
-            conn.commit()
+        if inspector.has_table('messages'):
+            msg_columns = [c['name'] for c in inspector.get_columns('messages')]
+            with engine.connect() as conn:
+                if 'translations' not in msg_columns:
+                    col_type = "JSONB" if not DATABASE_URL.startswith("sqlite") else "JSON"
+                    conn.execute(text(f"ALTER TABLE messages ADD COLUMN translations {col_type} DEFAULT '{{}}'::jsonb" if not DATABASE_URL.startswith("sqlite") else f"ALTER TABLE messages ADD COLUMN translations JSON DEFAULT '{{}}'"))
+                if 'file_url' not in msg_columns:
+                    conn.execute(text("ALTER TABLE messages ADD COLUMN file_url VARCHAR"))
+                if 'thumbnail_url' not in msg_columns:
+                    conn.execute(text("ALTER TABLE messages ADD COLUMN thumbnail_url VARCHAR"))
+                if 'file_name' not in msg_columns:
+                    conn.execute(text("ALTER TABLE messages ADD COLUMN file_name VARCHAR"))
+                if 'file_type' not in msg_columns:
+                    conn.execute(text("ALTER TABLE messages ADD COLUMN file_type VARCHAR"))
+                if 'draft_content' not in msg_columns:
+                    conn.execute(text("ALTER TABLE messages ADD COLUMN draft_content TEXT"))
+                conn.commit()
 
-if inspector.has_table('messages'):
-    msg_columns = [c['name'] for c in inspector.get_columns('messages')]
-    with engine.connect() as conn:
-        if 'translations' not in msg_columns:
-            col_type = "JSONB" if not DATABASE_URL.startswith("sqlite") else "JSON"
-            conn.execute(text(f"ALTER TABLE messages ADD COLUMN translations {col_type} DEFAULT '{{}}'::jsonb" if not DATABASE_URL.startswith("sqlite") else f"ALTER TABLE messages ADD COLUMN translations JSON DEFAULT '{{}}'"))
-        if 'file_url' not in msg_columns:
-            conn.execute(text("ALTER TABLE messages ADD COLUMN file_url VARCHAR"))
-        if 'thumbnail_url' not in msg_columns:
-            conn.execute(text("ALTER TABLE messages ADD COLUMN thumbnail_url VARCHAR"))
-        if 'file_name' not in msg_columns:
-            conn.execute(text("ALTER TABLE messages ADD COLUMN file_name VARCHAR"))
-        if 'file_type' not in msg_columns:
-            conn.execute(text("ALTER TABLE messages ADD COLUMN file_type VARCHAR"))
-        if 'draft_content' not in msg_columns:
-            conn.execute(text("ALTER TABLE messages ADD COLUMN draft_content TEXT"))
-        conn.commit()
-
-if inspector.has_table('chat_documents'):
-    doc_columns = [c['name'] for c in inspector.get_columns('chat_documents')]
-    with engine.connect() as conn:
-        if 'file_url' not in doc_columns:
-            conn.execute(text("ALTER TABLE chat_documents ADD COLUMN file_url VARCHAR"))
-        if 'thumbnail_url' not in doc_columns:
-            conn.execute(text("ALTER TABLE chat_documents ADD COLUMN thumbnail_url VARCHAR"))
-        if 'file_name' not in doc_columns:
-            conn.execute(text("ALTER TABLE chat_documents ADD COLUMN file_name VARCHAR"))
-        if 'mime_type' not in doc_columns:
-            conn.execute(text("ALTER TABLE chat_documents ADD COLUMN mime_type VARCHAR"))
-        if 'document_date' not in doc_columns:
-            conn.execute(text("ALTER TABLE chat_documents ADD COLUMN document_date VARCHAR"))
-        if 'issuer' not in doc_columns:
-            conn.execute(text("ALTER TABLE chat_documents ADD COLUMN issuer VARCHAR"))
-        if 'summary' not in doc_columns:
-            conn.execute(text("ALTER TABLE chat_documents ADD COLUMN summary VARCHAR"))
-        if 'perception_json' not in doc_columns:
-            col_type = "JSONB" if not DATABASE_URL.startswith("sqlite") else "JSON"
-            conn.execute(text(f"ALTER TABLE chat_documents ADD COLUMN perception_json {col_type}"))
-        conn.commit()
-
-# --- ENABLE ROW LEVEL SECURITY (RLS) ON POSTGRES ---
-if not DATABASE_URL.startswith("sqlite"):
-    with engine.connect() as conn:
-        conn.execute(text("ALTER TABLE users ENABLE ROW LEVEL SECURITY;"))
-        conn.execute(text("ALTER TABLE chats ENABLE ROW LEVEL SECURITY;"))
-        conn.execute(text("ALTER TABLE messages ENABLE ROW LEVEL SECURITY;"))
-        conn.execute(text("ALTER TABLE chat_documents ENABLE ROW LEVEL SECURITY;"))
-        conn.commit()
+        if inspector.has_table('chat_documents'):
+            doc_columns = [c['name'] for c in inspector.get_columns('chat_documents')]
+            with engine.connect() as conn:
+                if 'file_url' not in doc_columns:
+                    conn.execute(text("ALTER TABLE chat_documents ADD COLUMN file_url VARCHAR"))
+                if 'thumbnail_url' not in doc_columns:
+                    conn.execute(text("ALTER TABLE chat_documents ADD COLUMN thumbnail_url VARCHAR"))
+                if 'file_name' not in doc_columns:
+                    conn.execute(text("ALTER TABLE chat_documents ADD COLUMN file_name VARCHAR"))
+                if 'mime_type' not in doc_columns:
+                    conn.execute(text("ALTER TABLE chat_documents ADD COLUMN mime_type VARCHAR"))
+                if 'document_date' not in doc_columns:
+                    conn.execute(text("ALTER TABLE chat_documents ADD COLUMN document_date VARCHAR"))
+                if 'issuer' not in doc_columns:
+                    conn.execute(text("ALTER TABLE chat_documents ADD COLUMN issuer VARCHAR"))
+                if 'summary' not in doc_columns:
+                    conn.execute(text("ALTER TABLE chat_documents ADD COLUMN summary VARCHAR"))
+                if 'perception_json' not in doc_columns:
+                    col_type = "JSONB" if not DATABASE_URL.startswith("sqlite") else "JSON"
+                    conn.execute(text(f"ALTER TABLE chat_documents ADD COLUMN perception_json {col_type}"))
+                conn.commit()
+        # --- ENABLE ROW LEVEL SECURITY (RLS) ON POSTGRES ---
+        if not DATABASE_URL.startswith("sqlite"):
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE users ENABLE ROW LEVEL SECURITY;"))
+                conn.execute(text("ALTER TABLE chats ENABLE ROW LEVEL SECURITY;"))
+                conn.execute(text("ALTER TABLE messages ENABLE ROW LEVEL SECURITY;"))
+                conn.execute(text("ALTER TABLE chat_documents ENABLE ROW LEVEL SECURITY;"))
+                conn.commit()
+    except Exception as e:
+        print(f"[DB INIT WARNING]: {e}")
