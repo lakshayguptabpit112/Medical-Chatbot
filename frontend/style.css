@@ -207,6 +207,20 @@ body {
     padding-right: 5px; 
 }
 
+.chat-title-input {
+    flex-grow: 1;
+    background: #1e1f29;
+    color: #f1f5f9;
+    border: 1px solid #3b82f6;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    width: calc(100% - 24px);
+}
+
 .chat-item:hover {
     background-color: #2a2b32; /* Solid color to match the gradient */
 }
@@ -254,6 +268,10 @@ body {
 
 .action-btn:hover {
     color: #ffffff;
+}
+
+.rename-btn:hover {
+    color: #60a5fa !important;
 }
 
 .delete-btn:hover {

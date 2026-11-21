@@ -1245,12 +1245,12 @@ ChatsContainer.innerHTML +=`<div class="chat-list-header">Recent Chats</div>`;
               
               <!-- Smooth Overlay Actions Container -->
               <div class="chat-actions">
-                  <!-- Rename Icon (Dummy for now) -->
-                  <button class="action-btn" onclick="event.stopPropagation()">
+                  <!-- Rename Icon -->
+                  <button class="action-btn rename-btn" onclick="renameChat(event, ${chat.id})" title="Rename chat">
                       <i class="fa-solid fa-pen"></i>
                   </button>
                   <!-- Delete Icon -->
-                  <button class="action-btn delete-btn" onclick="deleteChat(event, ${chat.id})">
+                  <button class="action-btn delete-btn" onclick="deleteChat(event, ${chat.id})" title="Delete chat">
                       <i class="fa-solid fa-trash"></i>
                   </button>
               </div>
@@ -1288,6 +1288,90 @@ async function logout() {
 
     // 3. Bring the login overlay back up
     loginOverlay.hidden = false;
+}
+
+function renameChat(event, chatId) {
+    event.stopPropagation();
+
+    const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+    if (!chatItem) return;
+
+    const titleSpan = chatItem.querySelector('.chat-title');
+    if (!titleSpan) return;
+
+    // Prevent duplicate input if user clicks repeatedly
+    if (chatItem.querySelector('.chat-title-input')) return;
+
+    const oldTitle = titleSpan.textContent.trim();
+    const chatActions = chatItem.querySelector('.chat-actions');
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'chat-title-input';
+    input.value = oldTitle;
+    input.maxLength = 80;
+
+    // Temporarily hide action buttons so input has full room
+    if (chatActions) chatActions.style.display = 'none';
+
+    titleSpan.style.display = 'none';
+    titleSpan.parentNode.insertBefore(input, titleSpan);
+    input.focus();
+    input.select();
+
+    let isSaved = false;
+
+    const saveOrCancel = async (shouldSave) => {
+        if (isSaved) return;
+        isSaved = true;
+
+        const newTitle = input.value.trim();
+        input.remove();
+        titleSpan.style.display = '';
+        if (chatActions) chatActions.style.display = '';
+
+        if (shouldSave && newTitle && newTitle !== oldTitle) {
+            titleSpan.textContent = newTitle;
+            const chatObj = chats.find(c => c.id === chatId);
+            if (chatObj) chatObj.title = newTitle;
+
+            try {
+                const response = await fetch(`/chats/${chatId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: newTitle })
+                });
+                if (!response.ok) {
+                    console.error('Failed to update chat title on backend');
+                    titleSpan.textContent = oldTitle;
+                    if (chatObj) chatObj.title = oldTitle;
+                }
+            } catch (err) {
+                console.error('Network error updating chat title:', err);
+                titleSpan.textContent = oldTitle;
+                if (chatObj) chatObj.title = oldTitle;
+            }
+        }
+    };
+
+    input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveOrCancel(true);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            saveOrCancel(false);
+        }
+    });
+
+    input.addEventListener('blur', () => {
+        saveOrCancel(true);
+    });
+
+    input.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
 }
 
 async function deleteChat(event, chatId) {

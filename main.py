@@ -159,6 +159,10 @@ class RefineRequest(BaseModel):
     clarifications: list[ClarificationChoice]
 
 
+class RenameChatRequest(BaseModel):
+    title: str
+
+
 # --- HELPER FUNCTIONS ---
 
 async def handle_document_upload(
@@ -976,6 +980,19 @@ def create_new_chat(user_prompt: str, current_user: UserInDB = Depends(get_curre
     db.commit()
     
     return {"id": new_chat.id}
+
+
+@app.patch("/chats/{chat_id}")
+def rename_chat(chat_id: int, payload: RenameChatRequest, current_user: UserInDB = Depends(get_current_user), db: Session = Depends(get_db)):
+    chat = db.query(Chat).filter(Chat.id == chat_id, Chat.user_id == current_user.id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found or access denied")
+    clean_title = payload.title.strip()
+    if not clean_title:
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+    chat.title = clean_title[:80]
+    db.commit()
+    return {"success": True, "id": chat.id, "title": chat.title}
 
 
 @app.delete("/chats/{chat_id}")
