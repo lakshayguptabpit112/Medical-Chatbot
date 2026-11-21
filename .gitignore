@@ -20,5 +20,8 @@ wheels/
 # Uploaded patient media
 uploads/
 output/
+medical_reference_docs/.*
+medical_reference_docs/*.json
+
 
 

@@ -83,6 +83,46 @@ DOC_METADATA = {
         "domain": "medicines",
         "source": "Indian_Pharmacopeia",
         "ui_label": "Indian Outpatient Drug Brands & Food Timing Pharmacopeia"
+    },
+    "Clinical_Drug_Interactions_and_Contraindications_Guide.md": {
+        "domain": "medicines",
+        "source": "Clinical_Drug_Interactions_Guide",
+        "ui_label": "Clinical Drug-Drug & Food Interactions Guide (WHO/BNF)"
+    },
+    "Outpatient_Disease_Protocols_and_Treatment_Targets_Guide.md": {
+        "domain": "diseases",
+        "source": "Outpatient_Disease_Protocols_Guide",
+        "ui_label": "Outpatient Chronic Disease Protocols (ACC/ADA/GINA/GOLD)"
+    },
+    "Emergency_Clinical_Red_Flags_and_Hospital_Triage_Protocols.md": {
+        "domain": "general",
+        "source": "Emergency_Red_Flags_Triage_Protocols",
+        "ui_label": "Emergency Red Flags & Hospital Triage Protocols (AHA/IMCI/ACEP)"
+    },
+    "Patient_Medicine_Administration_Food_Timings_and_Missed_Dose_Guide.md": {
+        "domain": "medicines",
+        "source": "Medicine_Administration_and_Missed_Dose_Guide",
+        "ui_label": "Patient Medication Administration & Missed Dose Protocols (IPC/NHS)"
+    },
+    "ICMR_Patient_Diet_and_Lifestyle_Management_Guidelines.md": {
+        "domain": "general",
+        "source": "ICMR_Diet_Guidelines",
+        "ui_label": "ICMR Patient Diet & Lifestyle Management Guidelines"
+    },
+    "Outpatient_First_Aid_Pediatric_Care_and_Red_Flags_Guide.md": {
+        "domain": "general",
+        "source": "Pediatric_First_Aid_Guide",
+        "ui_label": "Outpatient First Aid & Pediatric Care Guide"
+    },
+    "Patient_Guide_to_Diagnostic_Scans_and_Lab_Preparation.md": {
+        "domain": "laboratory",
+        "source": "Diagnostic_Scans_Prep_Guide",
+        "ui_label": "Diagnostic Scans & Lab Test Preparation Guide"
+    },
+    "Practical_Medicine_Administration_and_Pregnancy_Safety_Guide.md": {
+        "domain": "medicines",
+        "source": "Pregnancy_Safety_Guide",
+        "ui_label": "Medication Administration & Pregnancy Safety Guide"
     }
 }
 
