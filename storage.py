@@ -18,13 +18,13 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-def preprocess_medical_image(image_bytes: bytes, max_dimension: int = 1400, quality: int = 85) -> bytes:
+def preprocess_medical_image(image_bytes: bytes, max_dimension: int = 1600, quality: int = 85) -> bytes:
     """
     Compresses mobile camera photos by ~90-95% while keeping clinical text and lab tables crisp.
     - Fixes EXIF phone camera rotation.
     - Converts RGBA/transparency to RGB for clean JPEG output.
-    - Proportionally resizes to max_dimension using high-quality Lanczos filter.
-    - Saves optimized JPEG in memory.
+    - Proportionally resizes to max_dimension (1600px) using high-quality Lanczos filter.
+    - Saves optimized JPEG in memory (~240KB).
     """
     try:
         with Image.open(io.BytesIO(image_bytes)) as img:
@@ -83,32 +83,36 @@ def generate_pdf_thumbnail(pdf_input: bytes | str, output_path: str = None) -> b
 
 def upload_medical_file(file_bytes: bytes, filename: str, mime_type: str) -> str:
     """
-    Saves file immediately to local /uploads directory (0ms blocking latency).
-    Optionally syncs to Supabase Cloud Storage in the background without blocking the user request.
-    Returns the local /uploads/ URL.
+    Saves file to Supabase Cloud Storage (primary for persistence across host sleeps/restarts)
+    with seamless local /uploads fallback if Supabase is not configured or temporarily unreachable.
     """
     safe_filename = f"{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}_{filename}"
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     local_path = os.path.join(UPLOAD_DIR, safe_filename)
-    with open(local_path, "wb") as f:
-        f.write(file_bytes)
+    try:
+        with open(local_path, "wb") as f:
+            f.write(file_bytes)
+    except Exception as e:
+        print(f"[STORAGE LOCAL CACHE NOTICE]: {e}")
 
-    # Non-blocking background sync to Supabase Cloud Storage (never blocks user request)
+    # 1. Upload to Supabase Storage if configured (permanent cloud URLs survive Render container sleeps)
     if SUPABASE_URL and SUPABASE_KEY:
-        def _sync_supabase():
-            try:
-                upload_url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{safe_filename}"
-                headers = {
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                    "Content-Type": mime_type,
-                    "x-upsert": "true"
-                }
-                requests.post(upload_url, headers=headers, data=file_bytes, timeout=5)
-            except Exception:
-                pass
-        import threading
-        threading.Thread(target=_sync_supabase, daemon=True).start()
+        try:
+            upload_url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{safe_filename}"
+            headers = {
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": mime_type,
+                "x-upsert": "true"
+            }
+            res = requests.post(upload_url, headers=headers, data=file_bytes, timeout=4)
+            if res.status_code in (200, 201):
+                return f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{safe_filename}"
+            else:
+                print(f"[SUPABASE UPLOAD HTTP {res.status_code}]: {res.text}")
+        except Exception as e:
+            print(f"[SUPABASE UPLOAD NOTICE]: {e}")
 
+    # 2. Local fallback
     return f"/uploads/{safe_filename}"
 
 
@@ -131,8 +135,9 @@ def delete_medical_file(file_url: str):
         return
 
     # Case 2: Local Disk
-    if file_url.startswith("/uploads/"):
-        local_path = file_url.lstrip("/")
+    if "/uploads/" in file_url:
+        local_filename = file_url.split("/uploads/")[-1]
+        local_path = os.path.join(UPLOAD_DIR, local_filename)
         if os.path.exists(local_path):
             try:
                 os.remove(local_path)

@@ -299,12 +299,24 @@ def parse_stage3_output(raw_output: str) -> tuple[str, dict | None]:
                 
             qs = json.loads(clean_json)
             if isinstance(qs, list) and len(qs) > 0:
-                clarification_data = {
-                    "needed": True,
-                    "questions": qs,
-                    "currentIndex": 0,
-                    "userAnswers": []
-                }
+                # Filter out any malformed items: each question must have text and at least 2 non-empty options
+                valid_qs = []
+                for q in qs:
+                    if isinstance(q, dict) and q.get("question"):
+                        raw_opts = q.get("options")
+                        if isinstance(raw_opts, list):
+                            clean_opts = [str(o).strip() for o in raw_opts if str(o).strip()]
+                            if len(clean_opts) >= 2:
+                                q["options"] = clean_opts
+                                valid_qs.append(q)
+
+                if valid_qs:
+                    clarification_data = {
+                        "needed": True,
+                        "questions": valid_qs,  # Dynamic count: AI generates as many as clinically needed!
+                        "currentIndex": 0,
+                        "userAnswers": []
+                    }
         except Exception as e:
             print(f"[STAGE 3 CLARIFICATION PARSE NOTICE]: {e}")
 
@@ -599,7 +611,7 @@ vector_db = PineconeVectorStore(index_name=index_name, embedding=embeddings)
 print("Setting Up The Retriever...")
 retriever = vector_db.as_retriever(
     search_type="similarity_score_threshold",
-    search_kwargs={"k": 5, "score_threshold": 0.80}
+    search_kwargs={"k": 5, "score_threshold": 0.70}
 )
 
 print("Setting up the active LLM...")
