@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Medical Chatbot</title>
-    <link rel="stylesheet" href="/frontend/style.css?v=13">
+    <link rel="stylesheet" href="/frontend/style.css?v=25">
     <!-- FontAwesome for the send icon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <!-- Google Identity Services -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://accounts.google.com/gsi/client" async defer onload="if(typeof initGoogleAuth==='function')initGoogleAuth()"></script>
 </head>
 <body>
     <div class="app-container">
@@ -21,7 +21,7 @@
         <div class="sidebar">
             <div class="sidebar-header-mobile">
                 <div class="mobile-drawer-title">
-                    <img src="https://cdn-icons-png.flaticon.com/512/3304/3304567.png" alt="" class="drawer-title-avatar">
+                    <img src="/avatar/me" alt="" class="drawer-title-avatar" referrerpolicy="no-referrer" onerror="this.onerror=null; this.src='/avatar/me';">
                     <span>Medical Chatbot</span>
                 </div>
                 <button class="sidebar-close-btn" onclick="closeSidebarOnMobile()" aria-label="Close menu">
@@ -41,7 +41,7 @@
             <!-- Account area. The logout button is ready for JavaScript wiring. -->
             <div class="sidebar-profile" aria-label="Demo user profile">
                 <div class="sidebar-profile-avatar" aria-hidden="true">
-                    <img src="https://cdn-icons-png.flaticon.com/512/3304/3304567.png" alt="">
+                    <img src="/avatar/me" alt="Profile" referrerpolicy="no-referrer" onerror="this.onerror=null; this.src='/avatar/me';">
                     <span class="sidebar-profile-status"></span>
                 </div>
                 <div class="sidebar-profile-details">
@@ -108,8 +108,29 @@
 
             <!-- Input Area -->
             <div class="input-wrapper">
+                <!-- Image / Report Preview Container -->
+                <div id="image-preview-container" class="image-preview-container" style="display: none;">
+                    <div class="image-preview-card">
+                        <div class="preview-thumb-wrapper">
+                            <img id="image-preview-img" src="" alt="Attachment Preview" style="display: none;" />
+                            <i id="pdf-preview-icon" class="fa-solid fa-file-pdf" style="display: none;"></i>
+                        </div>
+                        <div class="preview-meta">
+                            <span id="preview-filename" class="preview-filename"></span>
+                            <span id="preview-filesize" class="preview-filesize"></span>
+                        </div>
+                        <button type="button" id="remove-image-btn" class="remove-image-btn" title="Remove attachment">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="chat-input-container">
-                    <textarea id="chat-input" rows="1" placeholder="Type your message..." autocomplete="off"></textarea>
+                    <button type="button" id="attach-btn" class="chat-attach-btn" title="Attach prescription or report (JPG, PNG, PDF)">
+                        <i class="fa-solid fa-paperclip"></i>
+                    </button>
+                    <input type="file" id="image-input" accept="image/jpeg,image/png,image/webp,application/pdf" style="display: none;" />
+                    <textarea id="chat-input" rows="1" placeholder="Type a message or attach a prescription / report..." autocomplete="off"></textarea>
                     <button id="send-btn">
                         <i class="fa-solid fa-paper-plane send-icon"></i>
                     </button>
@@ -250,6 +271,8 @@
         </section>
     </div>
 
-    <script src="/frontend/script.js?v=10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <script src="/frontend/script.js?v=25"></script>
 </body>
 </html>

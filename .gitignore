@@ -16,3 +16,7 @@ wheels/
 # Local SQLite databases
 *.db
 *.sqlite3
+
+# Uploaded patient media
+uploads/
+

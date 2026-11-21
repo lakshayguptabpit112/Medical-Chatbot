@@ -30,3 +30,13 @@ tiktoken>=0.7.0
 # --- Document Scraping & Parsing ---
 beautifulsoup4>=4.12.0
 pypdf>=5.0.0
+pypdfium2>=4.30.0
+pillow>=10.0.0
+
+# --- Audio & Speech Synthesis ---
+edge-tts>=7.0.0
+
+# --- Form Uploads & Fuzzy String Matching ---
+python-multipart>=0.0.12
+rapidfuzz>=3.0.0
+
