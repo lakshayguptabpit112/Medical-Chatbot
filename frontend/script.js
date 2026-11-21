@@ -1136,11 +1136,7 @@ async function loadRealHistory() {
 
 }
 async function initializeApp() {
-
-
-
     try {
-
         const response = await fetch("/users/me");
         if (response.status === 401) {
             loginOverlay.hidden = false;
@@ -1150,20 +1146,17 @@ async function initializeApp() {
             throw new Error("Could not verify session");
         }
 
-        if (!response.ok) {
-            throw new Error("Could not load chats");
-        }
-
+        const userData = await response.json();
         loginOverlay.hidden = true;
 
         showChatLoading();
         UpdateUserInfo(userData);
         await loadAllChats(true);
-        hideChatLoading();
-  
-
     } catch (error) {
+        console.error("initializeApp error:", error);
         loginOverlay.hidden = false;    
+    } finally {
+        hideChatLoading();
     }
 }
 
@@ -1176,7 +1169,7 @@ function UpdateUserInfo(userData = null) {
         profileNameElement.textContent = userData.username;
     }
 
-    // 2. Update avatar using /avatar/me backend proxy (bypasses referrer blocks and adblockers)
+    // 2. Update avatar: use user picture if available, otherwise fallback to /avatar/me backend proxy
     const avatarImg = document.querySelector(".sidebar-profile-avatar img");
     if (avatarImg) {
         avatarImg.referrerPolicy = "no-referrer";
@@ -1185,7 +1178,7 @@ function UpdateUserInfo(userData = null) {
             this.onerror = null;
             this.src = "/avatar/me";
         };
-        avatarImg.src = "/avatar/me";
+        avatarImg.src = userData.picture_url || "/avatar/me";
     }
 }
 
@@ -1679,11 +1672,13 @@ registerForm.addEventListener("submit", async (event) => {
 showRegisterButton.addEventListener("click", () => {
     loginView.hidden = true;
     registerView.hidden = false;
+    initGoogleAuth();
 });
 
 showLoginButton.addEventListener("click", () => {
     registerView.hidden = true;
     loginView.hidden = false;
+    initGoogleAuth();
 });
 
 
@@ -1921,16 +1916,32 @@ async function sendMessage() {
     }
 }
 // --- Google Sign-In Initialization & Callback ---
-async function initGoogleAuth() {
+async function initGoogleAuth(retries = 25) {
     try {
         const res = await fetch("/auth/google/client-id");
+        if (!res.ok) return;
         const { client_id } = await res.json();
         
-        if (!client_id || !window.google) return;
+        if (!client_id) {
+            console.warn("[Google Auth]: No client_id configured.");
+            return;
+        }
+
+        // Retry until Google Identity Services (GSI) script is loaded
+        if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+            if (retries > 0) {
+                setTimeout(() => initGoogleAuth(retries - 1), 150);
+            } else {
+                console.warn("[Google Auth]: Google GSI script blocked or timed out.");
+            }
+            return;
+        }
 
         google.accounts.id.initialize({
             client_id: client_id,
-            callback: handleGoogleCredentialResponse
+            callback: handleGoogleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true
         });
 
         // Render button in Login view
