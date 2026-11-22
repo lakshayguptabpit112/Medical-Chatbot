@@ -778,24 +778,26 @@ body {
     width: min(100%, 410px);
     padding: 36px;
     color: #f1f5f9;
-    background: #171721;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: linear-gradient(180deg, #191a26 0%, #13141f 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 16px;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .login-mark {
     display: grid;
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     place-items: center;
     margin-bottom: 22px;
-    color: #171721;
-    background: #232733;
+    color: #f6c86a;
+    background: rgba(246, 200, 106, 0.12);
+    border: 1px solid rgba(246, 200, 106, 0.28);
     border-radius: 12px;
-    font-size: 30px;
-    font-weight: 500;
+    font-size: 28px;
+    font-weight: 600;
     line-height: 1;
+    box-shadow: 0 0 20px rgba(246, 200, 106, 0.12);
 }
 
 .login-brand {
@@ -840,35 +842,51 @@ body {
 .login-field input {
     width: 100%;
     min-height: 44px;
-    padding: 0 12px;
+    padding: 0 14px;
     color: #f4f4f6;
-    background: #202035;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #191a26;
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
     outline: none;
     font-size: 14px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.login-field input:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+    background: #1d1e2c;
 }
 
 .login-field input:focus {
+    background: #1d1e2c;
     border-color: #f6c86a;
-    box-shadow: 0 0 0 3px rgba(246, 200, 106, 0.13);
+    box-shadow: 0 0 0 3px rgba(246, 200, 106, 0.16);
 }
 
 .login-submit {
     min-height: 44px;
-    margin-top: 4px;
-    color: #171721;
-    background: #232733;
+    margin-top: 6px;
+    color: #12131a;
+    background: #f6c86a;
     border: 0;
     border-radius: 8px;
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
-    transition: background 0.2s ease;
+    letter-spacing: 0.02em;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(246, 200, 106, 0.22);
 }
 
 .login-submit:hover {
     background: #ffd77d;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(246, 200, 106, 0.35);
+}
+
+.login-submit:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(246, 200, 106, 0.2);
 }
 
 .login-error {
